@@ -1,37 +1,53 @@
 # %%
 import liza_module
-import pandas as pd
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 
-btc_hist_path = 'E:/hist_data/symbol\\BTCJPY\\1m.csv'
 # %%
 m = 1
+k = 90
+pr_k = 30
+
+btc_hist_path = 'E:/hist_data/symbol\\BTCJPY\\1m.csv'
 df = pd.read_csv(btc_hist_path)
-hist_data = np.array(df['price'], dtype='int32')[::m]
-hist_data_2d = liza_module.hist_conv2d(hist_data, 120)
-# %%
-data_x = hist_data_2d[:, :90]
-data_y = hist_data_2d[:, 90:]
-data_y = 1*(data_y[:, -1] - data_x[:, -1] > 0)
+hist = np.array(df['price'], dtype='int32')
+
+
+pr_m = 256
+m_lis = [128, 64, 32, 16, 8, 4, 2, 1]
+multi_hist = [liza_module.ret_long_hist(hist, k, pr_m)]
+for mm in m_lis:
+    long_hist = liza_module.ret_long_hist(hist, k, mm)
+    long_hist = long_hist[k*(pr_m-mm)-(pr_m-mm):]
+    multi_hist.append(long_hist)
+
+mn_len = len(multi_hist[-1])
+multi_hist = [ml[:mn_len] for ml in multi_hist]
+multi_hist = np.array(multi_hist)
+multi_hist = multi_hist.transpose(1, 2, 0)
+
+y_2d = liza_module.hist_conv2d(hist[(pr_m)*(k-1):], pr_k)
+data_y = 1*(y_2d[:, -1] - y_2d[:, 0] > 0)
 data_y = np.concatenate([data_y.reshape(-1, 1), ((data_y-1)*-1).reshape(-1, 1)], axis=1)
 
-data_x = liza_module.normalize(data_x)
-
-train_x, valid_x, test_x = liza_module.split_data(data_x)
-train_y, valid_y, test_y = liza_module.split_data(data_y)
-
-indx = np.arange(len(train_x))
-np.random.shuffle(indx)
-train_x = train_x[indx]
-train_y = train_y[indx]
+multi_hist = multi_hist[:len(data_y)]
 # %%
-
-model = liza_module.BTC_Transformer(seq_len=88,
+mx = np.max(np.max(multi_hist, axis=1), axis=1)
+mn = np.min(np.min(multi_hist, axis=1), axis=1)
+# %%
+a = (multi_hist - mn.reshape(-1, 1, 1))
+b = (mx.reshape(-1, 1, 1) - mn.reshape(-1, 1, 1))
+normed = (a/b).astype('float32')
+# %%
+train_x, valid_x, test_x = liza_module.split_data(normed)
+train_y, valid_y, test_y = liza_module.split_data(data_y)
+# %%
+model = liza_module.BTC_Transformer(seq_len=k,
                                     num_layers=3,
-                                    d_model=32,
-                                    num_heads=8,
+                                    d_model=9,
+                                    num_heads=3,
                                     dff=512,
                                     output_size=256)
 
@@ -95,31 +111,5 @@ for epoch in range(epochs):
     freeze = freeze - 1 if freeze > 0 else freeze
 
     print('')
-# %%
-model.load_weights('weights/best_weights')
-# %%
-model.evaluate(test_x, test_y)
-# %%
-tr_pred = model.predict(train_x)
-vl_pred = model.predict(valid_x)
-te_pred = model.predict(test_x)
-# %%
-k = 0.5
-win = np.sum((tr_pred > k)*train_y, axis=1)
-bet = np.sum(tr_pred > k)
-ratio = np.sum(win)/bet
-print(bet/len(win))
-print(ratio)
-# %%
-win = np.sum((vl_pred > k)*valid_y, axis=1)
-bet = np.sum(vl_pred > k)
-ratio = np.sum(win)/bet
-print(bet/len(win))
-print(ratio)
-# %%
-win = np.sum((te_pred > k)*test_y, axis=1)
-bet = np.sum(te_pred > k)
-ratio = np.sum(win)/bet
-print(bet/len(win))
-print(ratio)
+
 # %%

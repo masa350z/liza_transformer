@@ -5,11 +5,19 @@ import numpy as np
 
 
 def hist_conv2d(hist, k):  # ヒストリカルデータを(n,)次元から(n,k)次元に変換
-    ret = []
-    for i in tqdm(range(k)):
-        ret.append(np.roll(hist, -i))
+    hist_2d = [np.roll(hist, -i) for i in range(k)]
+    hist_2d = np.array(hist_2d)[:, :-(k-1)].T
 
-    return np.array(ret)[:, :-(k-1)].T
+    return hist_2d
+
+
+def ret_long_hist(base_hist, k, mm):
+    hist_2d_mm = [np.roll(base_hist[::mm], -i) for i in range(k)]
+    hist_2d_mm = np.array(hist_2d_mm)[:, :-(k-1)].T
+    hist_2d_mm = np.tile(np.expand_dims(hist_2d_mm, 2), mm).transpose(0, 2, 1)
+    hist_2d_mm = np.concatenate(hist_2d_mm)
+
+    return hist_2d_mm
 
 
 def normalize(hist_data_2d):
@@ -243,22 +251,18 @@ class BTC_Transformer(tf.keras.Model):
     def __init__(self, seq_len, num_layers, d_model, num_heads, dff, output_size):
         super(BTC_Transformer, self).__init__()
 
-        self.conv1d = layers.Conv1D(filters=d_model, kernel_size=3, activation='relu')
         self.encoder = NoEmbeddingEncoder(seq_len, num_layers, d_model, num_heads, dff)
-        self.layernorm1 = layers.LayerNormalization()
         self.dense01 = layers.Dense(output_size, activation='relu')
         self.dense02 = layers.Dense(output_size, activation='relu')
         self.output_layer = layers.Dense(2, activation='softmax')
 
         self.flatten = layers.Flatten()
 
-    def call(self, inp, training=False, enc_padding_mask=None):
-        inp = self.conv1d(tf.expand_dims(inp, 2))
-        enc_output = self.encoder(inp, training, enc_padding_mask)
-        enc_output = self.layernorm1(enc_output)
-
-        x = self.dense01(enc_output)
+    def call(self, inp):
+        x = self.encoder(inp)
         x = self.flatten(x)
+        
+        x = self.dense01(x)
         x = self.dense02(x)
 
         return self.output_layer(x)
