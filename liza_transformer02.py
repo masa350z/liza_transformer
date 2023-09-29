@@ -10,7 +10,7 @@ m = 1
 k = 90
 pr_k = 30
 
-btc_hist_path = 'E:/hist_data/symbol\\BTCJPY\\1m.csv'
+btc_hist_path = 'D:/documents/hist_data/symbol/BTCJPY/1m.csv'
 df = pd.read_csv(btc_hist_path)
 hist = np.array(df['price'], dtype='int32')
 
@@ -30,7 +30,8 @@ multi_hist = multi_hist.transpose(1, 2, 0)
 
 y_2d = liza_module.hist_conv2d(hist[(pr_m)*(k-1):], pr_k)
 data_y = 1*(y_2d[:, -1] - y_2d[:, 0] > 0)
-data_y = np.concatenate([data_y.reshape(-1, 1), ((data_y-1)*-1).reshape(-1, 1)], axis=1)
+data_y = np.concatenate(
+    [data_y.reshape(-1, 1), ((data_y-1)*-1).reshape(-1, 1)], axis=1)
 
 multi_hist = multi_hist[:len(data_y)]
 # %%
@@ -45,11 +46,11 @@ train_x, valid_x, test_x = liza_module.split_data(normed)
 train_y, valid_y, test_y = liza_module.split_data(data_y)
 # %%
 model = liza_module.BTC_Transformer(seq_len=k,
-                                    num_layers=3,
-                                    d_model=9,
+                                    num_layers=1,
+                                    d_model=126,
                                     num_heads=3,
-                                    dff=512,
-                                    output_size=256)
+                                    dff=128,
+                                    output_size=128)
 
 
 learning_rate = 2e-5
@@ -96,7 +97,8 @@ for epoch in range(epochs):
         freeze = 0
         best_val_loss = val_loss
         model.save_weights('weights/best_weights')
-        print(f"Epoch {epoch + 1}: Valid loss decreased to {val_loss}, saving weights.")
+        print(
+            f"Epoch {epoch + 1}: Valid loss decreased to {val_loss}, saving weights.")
 
     # valid lossが減少しなかった場合、保存しておいた最良の重みをロード
     else:
@@ -104,7 +106,8 @@ for epoch in range(epochs):
             model.load_weights('weights/best_weights')
             model_weights_random_init()
             freeze = k_freeze
-            print(f"Epoch {epoch + 1}: Valid loss did not decrease, loading weights.")
+            print(
+                f"Epoch {epoch + 1}: Valid loss did not decrease, loading weights.")
         else:
             print(f"Epoch {epoch + 1}: Valid loss did not decrease.")
 

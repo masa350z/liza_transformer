@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 
-btc_hist_path = 'E:/hist_data/symbol\\BTCJPY\\1m.csv'
+btc_hist_path = 'D:/documents/hist_data/symbol/BTCJPY/1m.csv'
 # %%
 m = 1
 df = pd.read_csv(btc_hist_path)
@@ -15,7 +15,8 @@ hist_data_2d = liza_module.hist_conv2d(hist_data, 120)
 data_x = hist_data_2d[:, :90]
 data_y = hist_data_2d[:, 90:]
 data_y = 1*(data_y[:, -1] - data_x[:, -1] > 0)
-data_y = np.concatenate([data_y.reshape(-1, 1), ((data_y-1)*-1).reshape(-1, 1)], axis=1)
+data_y = np.concatenate(
+    [data_y.reshape(-1, 1), ((data_y-1)*-1).reshape(-1, 1)], axis=1)
 
 data_x = liza_module.normalize(data_x)
 
@@ -80,7 +81,8 @@ for epoch in range(epochs):
         freeze = 0
         best_val_loss = val_loss
         model.save_weights('weights/best_weights')
-        print(f"Epoch {epoch + 1}: Valid loss decreased to {val_loss}, saving weights.")
+        print(
+            f"Epoch {epoch + 1}: Valid loss decreased to {val_loss}, saving weights.")
 
     # valid lossが減少しなかった場合、保存しておいた最良の重みをロード
     else:
@@ -88,7 +90,8 @@ for epoch in range(epochs):
             model.load_weights('weights/best_weights')
             model_weights_random_init()
             freeze = k_freeze
-            print(f"Epoch {epoch + 1}: Valid loss did not decrease, loading weights.")
+            print(
+                f"Epoch {epoch + 1}: Valid loss did not decrease, loading weights.")
         else:
             print(f"Epoch {epoch + 1}: Valid loss did not decrease.")
 
