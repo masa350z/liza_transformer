@@ -264,7 +264,7 @@ class LizaTrainer(Trainer):
     def __init__(self, model, weight_name, batch_size,
                  hist, m_lis, k, pr_k, base_m=None,
                  k_freeze=3, train_rate=0.6, valid_rate=0.2,
-                 init_ratio=1e-4, opt1=1e-6, opt2=5e-7, switch_epoch=30):
+                 init_ratio=1e-4, opt1=1e-5, opt2=5e-7, switch_epoch=30):
 
         super().__init__(model, weight_name,
                          hist, m_lis, k, pr_k, batch_size,

@@ -243,20 +243,71 @@ class BTC_Transformer(tf.keras.Model):
         return self.output_layer(x)
 
 
-class TimeSeriesModel(tf.keras.Model):
-    def __init__(self):
-        super(TimeSeriesModel, self).__init__()
-        self.conv1 = layers.Conv1D(
-            filters=64, kernel_size=3, activation='relu')
-        self.conv2 = layers.Conv1D(
-            filters=32, kernel_size=3, activation='relu')
-        self.flatten = layers.Flatten()
-        self.dense1 = layers.Dense(50, activation='relu')
-        self.dense2 = layers.Dense(2, activation='softmax')
+class SelfAttention(layers.Layer):
+    def __init__(self, output_shape, act='relu'):
+        super(SelfAttention, self).__init__()
+
+        self.dense01 = layers.Dense(output_shape*2, activation='relu')
+        self.dense02 = layers.Dense(output_shape, activation=act)
 
     def call(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
+        x = self.dense01(x)
+        x = self.dense02(x)
+
+        return x
+
+
+class Conv1DAttention(layers.Layer):
+    def __init__(self, output_shape, act='relu'):
+        super(Conv1DAttention, self).__init__()
+
+        self.conv01 = layers.Conv1D(
+            filters=8, kernel_size=9, activation='relu')
+        self.conv02 = layers.Conv1D(
+            filters=4, kernel_size=9, activation='relu')
+
+        self.flatten = layers.Flatten()
+
+        self.dense01 = layers.Dense(output_shape*2, activation='relu')
+        self.dense02 = layers.Dense(output_shape, activation=act)
+
+    def call(self, x):
+        x = self.conv01(x)
+        x = self.conv02(x)
         x = self.flatten(x)
-        x = self.dense1(x)
-        return self.dense2(x)
+
+        x = self.dense01(x)
+        x = self.dense02(x)
+
+        return x
+
+
+class TimeSeriesModel(tf.keras.Model):
+    def __init__(self, seq_len):
+        super(TimeSeriesModel, self).__init__()
+        # self.selfattention = SelfAttention(seq_len)
+        self.selfattention = Conv1DAttention(seq_len)
+
+        self.conv01 = layers.Conv1D(
+            filters=16, kernel_size=9, activation='relu')
+        self.conv02 = layers.Conv1D(
+            filters=8, kernel_size=9, activation='relu')
+
+        self.flatten = layers.Flatten()
+        self.dense01 = layers.Dense(100, activation='relu')
+        self.dense02 = layers.Dense(50, activation='relu')
+
+        self.output_layer = layers.Dense(2, activation='softmax')
+
+    def call(self, x):
+        # attention = self.selfattention(self.flatten(x))
+        attention = self.selfattention(x)
+        x = x*tf.expand_dims(attention, 2)
+        x = self.conv01(x)
+        x = self.conv02(x)
+        x = self.flatten(x)
+
+        x = self.dense01(x)
+        x = self.dense02(x)
+
+        return self.output_layer(x)
