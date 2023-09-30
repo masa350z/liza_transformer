@@ -1,9 +1,41 @@
 import tensorflow as tf
 from tqdm import tqdm
-import liza_module
 import numpy as np
+import liza_module
 import math
 import os
+
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        # Currently, memory growth needs to be the same across GPUs
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        # Memory growth must be set before GPUs have been initialized
+        print(e)
+
+
+class GradualDecaySchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
+    """
+    徐々に学習率を減少させるカスタムスケジュールクラス。
+    初期学習率から最終学習率に向かって指定したステップ数で減少する。
+    """
+
+    def __init__(self, initial_learning_rate, final_learning_rate, decay_steps):
+        super().__init__()
+
+        self.initial_learning_rate = initial_learning_rate
+        self.final_learning_rate = final_learning_rate
+
+        # 多項式減衰を使用して学習率を調整
+        self.decay_schedule_fn = tf.keras.optimizers.schedules.PolynomialDecay(
+            initial_learning_rate, decay_steps, final_learning_rate, power=1.0)
+
+    def __call__(self, step):
+        return self.decay_schedule_fn(step)
 
 
 class LizaDataSet:
@@ -30,7 +62,7 @@ class LizaDataSet:
         data_x, data_y = liza_module.ret_data_xy(hist, m_lis, base_m, k, pr_k)
         dataset_size = len(data_x)
         self.train_size = int(self.train_rate * dataset_size)
-        self.val_size = int(self.val_rate * dataset_size)
+        self.val_size = int(self.valid_rate * dataset_size)
 
         train_x, valid_x, test_x = self.ret_data_xy(data_x)
         train_y, valid_y, test_y = self.ret_data_xy(data_y)
@@ -76,13 +108,11 @@ class Trainer(LizaDataSet):
         self.init_ratio = init_ratio
 
         self.temp_val_loss = float('inf')
+        self.best_val_loss = float('inf')
         self.temp_val_acc = 0
+        self.best_val_acc = 0
 
         self.repeats = 0
-
-    def set_optimizer(self, learning_rate):
-        # オプティマイザの設定
-        self.optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
     def model_weights_random_init(self, init_ratio=1e-4):
         weights = self.model.get_weights()
@@ -102,7 +132,7 @@ class Trainer(LizaDataSet):
         # データセットを反復処理して予測を行う
         for x, y in tqdm(dataset):
             prediction.append(self.model(x))
-            one_hot_label.append(y[0])
+            one_hot_label.append(y)
 
         prediction = tf.concat(prediction, axis=0)
         one_hot_label = tf.concat(one_hot_label, axis=0)
@@ -126,7 +156,7 @@ class Trainer(LizaDataSet):
         for (batch, (data_x, data_y)) in enumerate(self.train_dataset):
             # 現在のバッチに対してトレーニンングステップを実行する
             self.train_step(data_x, data_y)
-            steps = math.ceil(len(self.sanren_odds_train)/self.batch_size)
+            steps = math.ceil(self.train_size/self.batch_size)
             condition1 = (
                 batch+1) % int(steps/per_batch) == 0
             if condition1 and (steps == 1 or (batch != 0)):
@@ -166,14 +196,13 @@ class Trainer(LizaDataSet):
                 print(f"Best test  acc  : {self.best_val_acc:.8f}")
 
     def run_train(self, per_batch,
-                  epochs=100000000, break_epochs=5,
-                  data_y_len=None):
+                  epochs=100000000, break_epochs=5):
         self.temp_val_loss = float('inf')
         self.temp_val_acc = 0
         self.last_epoch = 0
 
         for epoch in range(epochs):
-            self.run_mono_train(epoch, per_batch, data_y_len)
+            self.run_mono_train(epoch, per_batch)
 
             if epoch - self.last_epoch >= break_epochs or self.temp_val_loss == 0:
                 break
@@ -194,18 +223,57 @@ class Trainer(LizaDataSet):
 
         return test_acc, test_loss
 
+    def repeat_train(self, trainer,
+                     per_batch=1, repeats=1, break_epochs=5):
+        """
+        モデルのトレーニングを実行する関数。
+
+        Args:
+        - weights_name: 保存されるモデルの重みの名前
+        - per_batch, batch_size: トレーニングのバッチに関するパラメータ
+        - repeats: トレーニングの反復回数
+        - opt1, opt2, switch_epoch: オプティマイザの学習率に関するパラメータ
+
+        Returns:
+        - None
+        """
+
+        best_val_loss = float('inf')
+        best_val_acc = 0
+
+        # 指定した反復回数でモデルのトレーニングを実行
+        for repeat in range(repeats):
+            trainer.repeats = repeat
+            trainer.best_val_loss = best_val_loss
+            trainer.best_val_acc = best_val_acc
+
+            # トレーニングの実行
+            test_acc, test_loss = trainer.run_train(
+                per_batch, break_epochs=break_epochs)
+
+            # 最も良いtest_dataの損失を更新
+            if test_loss < best_val_loss:
+                best_val_loss = test_loss
+                best_val_acc = test_acc
+
+                # トレーニング後のモデルの重みを保存
+                trainer.model.save_weights(trainer.weight_name)
+
 
 class LizaTrainer(Trainer):
     def __init__(self, model, weight_name, batch_size,
                  hist, m_lis, k, pr_k, base_m=None,
                  k_freeze=3, train_rate=0.6, valid_rate=0.2,
-                 init_ratio=1e-4):
+                 init_ratio=1e-4, opt1=1e-6, opt2=5e-7, switch_epoch=30):
 
         super().__init__(model, weight_name,
                          hist, m_lis, k, pr_k, batch_size,
                          base_m,
                          train_rate, valid_rate,
                          k_freeze, init_ratio)
+
+        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
 
     def calc_acurracy(self, prediction, label):
         predicted_indices = tf.argmax(prediction, axis=1)
@@ -217,7 +285,8 @@ class LizaTrainer(Trainer):
         return accuracy
 
     def calc_loss(self, prediction, label):
-        loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
+        # loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
+        loss = tf.keras.losses.BinaryCrossentropy()(label, prediction)
 
         return loss
 
@@ -225,7 +294,7 @@ class LizaTrainer(Trainer):
         with tf.GradientTape() as tape:
             # 損失の計算
             # loss = tf.keras.losses.CategoricalCrossentropy()(data_y[0], self.model(data_x))
-            loss = self.calc_loss(self.model(data_x), data_y[0], data_y[1])
+            loss = self.calc_loss(self.model(data_x), data_y)
 
         # 勾配の計算と重みの更新
         gradients = tape.gradient(loss, self.model.trainable_variables)
