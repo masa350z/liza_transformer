@@ -8,7 +8,7 @@ def scaled_dot_product_attention(q, k, v, mask=None):
     """アテンションの重みの計算
     q, k, vは最初の次元が一致していること
     k, vは最後から2番めの次元が一致していること
-    マスクは型（パディングかルックアヘッドか）によって異なるshapeを持つが、
+    マスクは型(パディングかルックアヘッドか)によって異なるshapeを持つが、
     加算の際にブロードキャスト可能であること
     引数：
      q: query shape == (..., seq_len_q, depth)
@@ -56,7 +56,7 @@ def get_angles(pos, i, d_model):
 def positional_encoding(position, d_model):
     """
     poisition: シーケンスの最大長
-    d_model: 1シーケンスの次元数（単語ベクトルの次元数）
+    d_model: 1シーケンスの次元数(単語ベクトルの次元数)
     """
     angle_rads = get_angles(np.arange(position)[:, np.newaxis],
                             np.arange(d_model)[np.newaxis, :],
@@ -262,9 +262,9 @@ class Conv1DAttention(layers.Layer):
         super(Conv1DAttention, self).__init__()
 
         self.conv01 = layers.Conv1D(
-            filters=8, kernel_size=9, activation='relu')
+            filters=64, kernel_size=9, activation='relu')
         self.conv02 = layers.Conv1D(
-            filters=4, kernel_size=9, activation='relu')
+            filters=32, kernel_size=9, activation='relu')
 
         self.flatten = layers.Flatten()
 
@@ -283,31 +283,37 @@ class Conv1DAttention(layers.Layer):
 
 
 class TimeSeriesModel(tf.keras.Model):
-    def __init__(self, seq_len):
+    def __init__(self):
         super(TimeSeriesModel, self).__init__()
-        # self.selfattention = SelfAttention(seq_len)
-        self.selfattention = Conv1DAttention(seq_len)
-
         self.conv01 = layers.Conv1D(
-            filters=16, kernel_size=9, activation='relu')
+            filters=64, kernel_size=3, activation='relu')
         self.conv02 = layers.Conv1D(
-            filters=8, kernel_size=9, activation='relu')
+            filters=32, kernel_size=3, activation='relu')
 
         self.flatten = layers.Flatten()
-        self.dense01 = layers.Dense(100, activation='relu')
-        self.dense02 = layers.Dense(50, activation='relu')
+
+        self.dense01 = layers.Dense(200, activation='relu')
+        self.dense02 = layers.Dense(100, activation='relu')
+
+        self.dense03 = layers.Dense(100, activation='relu')
+        self.dense04 = layers.Dense(100, activation='relu')
+        self.dense05 = layers.Dense(100, activation='relu')
+        self.dense06 = layers.Dense(100, activation='relu')
 
         self.output_layer = layers.Dense(2, activation='softmax')
 
     def call(self, x):
-        # attention = self.selfattention(self.flatten(x))
-        attention = self.selfattention(x)
-        x = x*tf.expand_dims(attention, 2)
         x = self.conv01(x)
         x = self.conv02(x)
         x = self.flatten(x)
 
         x = self.dense01(x)
         x = self.dense02(x)
+
+        x_ = self.dense03(x)
+        x = self.dense04(x) + x_
+
+        x_ = self.dense05(x)
+        x = self.dense06(x) + x_
 
         return self.output_layer(x)
