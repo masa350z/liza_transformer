@@ -49,16 +49,15 @@ class ModelTrainer:
 # %%
 symbol = 'BTCJPY'
 
-k = 12
+k = 24
 pr_k = 12
 
-hist_path = '1m.csv'
+hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 
-
-m_lis = [15, 30, 45]
-base_m = m_lis[0]
+base_m = 5
+m_lis = [base_m, base_m*2, base_m*3]
 
 st = ''
 for i in m_lis:

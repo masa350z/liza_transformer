@@ -33,7 +33,7 @@ def ret_kane_ratio(pred, y, threshold, sp, sp_mode='ratio'):
 # %%
 symbol = 'BTCJPY'
 
-k = 72
+k = 12
 pr_k = 12
 
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
@@ -41,8 +41,8 @@ df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 
 
-m_lis = [5]
-base_m = m_lis[0]
+base_m = 5
+m_lis = [base_m, base_m*2, base_m*3]
 
 st = ''
 for i in m_lis:
@@ -70,7 +70,7 @@ sp = 0.05/100
 # sp = 0.5/100*0
 threshold = 0.5
 sp_mode = 'ratio'
-# %%
+
 kane, ratio = ret_kane_ratio(
     pred_train, train_y, threshold, sp, sp_mode=sp_mode)
 print(kane)

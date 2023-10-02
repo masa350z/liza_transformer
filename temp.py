@@ -11,7 +11,7 @@ symbol = 'BTCJPY'
 k = 72
 pr_k = 12
 
-hist_path = '1m.csv'
+hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 hist = np.array(np.arange(len(df['price'])), dtype='int32')
@@ -36,6 +36,8 @@ normed = (x-mn)/(mx-mn)
 normed = tf.where(tf.math.is_finite(normed), normed, 0.0)
 normed
 # %%
-mx = tf.reduce_max(tf.reduce_max(x, axis=1, keepdims=True), axis=2, keepdims=True)
-mn = tf.reduce_min(tf.reduce_min(x, axis=1, keepdims=True), axis=2, keepdims=True)
+mx = tf.reduce_max(tf.reduce_max(x, axis=1, keepdims=True),
+                   axis=2, keepdims=True)
+mn = tf.reduce_min(tf.reduce_min(x, axis=1, keepdims=True),
+                   axis=2, keepdims=True)
 # %%

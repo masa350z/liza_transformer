@@ -3,6 +3,8 @@ from keras import layers
 import tensorflow as tf
 import numpy as np
 
+# tf.keras.mixed_precision.set_global_policy('mixed_float16')
+
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
     try:
@@ -320,6 +322,41 @@ class FX_Transformer(TransformerBase):
         return x
 
 
+class FX_Transformer_v2(layers.Layer):
+    def __init__(self, seq_len, num_layer_loops, vector_dims, num_heads, inner_dims):
+        super(FX_Transformer_v2, self).__init__()
+
+        self.num_layer_loops = num_layer_loops
+        self.vector_dims = vector_dims
+        self.num_heads = num_heads
+        self.inner_dims = inner_dims
+
+        self.mha = tf.keras.layers.MultiHeadAttention(
+            num_heads=num_heads,
+            key_dim=vector_dims // num_heads,
+            dropout=0.0,
+            use_bias=True
+        )
+        self.ffn = point_wise_feed_forward_network(vector_dims, inner_dims)
+
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+
+        self.pos_encoding = positional_encoding(seq_len, vector_dims)
+
+    def call(self, x):
+        x += self.pos_encoding
+
+        for _ in range(self.num_layer_loops):
+            attn_output = self.mha(x, x, x)  # MultiHeadAttention
+            out1 = self.layernorm1(x + attn_output)
+
+            ffn_output = self.ffn(out1)  # Feed-forward network
+            x = self.layernorm2(out1 + ffn_output)
+
+        return x
+
+
 class SelfAttention(layers.Layer):
     def __init__(self, output_shape, act='relu'):
         super(SelfAttention, self).__init__()
@@ -378,15 +415,11 @@ class LizaTransformer(tf.keras.Model):
         self.conv03 = layers.Conv1D(
             filters=feature_dim, kernel_size=3, activation='relu')
 
-        self.fx_transfomer = FX_Transformer(
-            seq_len, 1, feature_dim, 4, feature_dim)
-        self.flatten = layers.Flatten()
-
-        # self.dense_volatility = layers.Dense(feature_dim)
+        self.fx_transfomer = FX_Transformer_v2(
+            seq_len-2, 1, feature_dim, 4, feature_dim)
 
         self.dence_layer = OutputLayers()
-
-        self.output_layer = layers.Dense(2, activation='softmax')
+        self.output_layer = layers.Dense(2)
 
     def normalize(self, x, mode=0):
         if mode == 0:
@@ -403,18 +436,6 @@ class LizaTransformer(tf.keras.Model):
 
         return normed
 
-    def ret_volatility(self, x):
-        std = tf.math.reduce_std(x, axis=1)
-        volatility = std/x[:, -1]
-
-        return volatility
-
-    def ret_rolled_differ(self, x, roll_ratio):
-        roll_num = int(x.shape[1]/roll_ratio)
-        diff = (x - tf.roll(x, roll_num, axis=1))[:, roll_num:]
-
-        return diff
-
     def call(self, x):
         norm01 = self.normalize(x, mode=0)
         x = self.normalize(x, mode=1)
@@ -426,6 +447,7 @@ class LizaTransformer(tf.keras.Model):
 
         x = x[:, -1]
 
-        x = self.dence_layer(x)
+        x = self.dence_layer(tf.cast(x, tf.float32))
+        x = self.output_layer(x)
 
-        return self.output_layer(x)
+        return layers.Activation('softmax', dtype='float32')(x)
