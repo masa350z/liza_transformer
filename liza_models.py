@@ -3,6 +3,18 @@ from keras import layers
 import tensorflow as tf
 import numpy as np
 
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        # Currently, memory growth needs to be the same across GPUs
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.list_logical_devices('GPU')
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+    except RuntimeError as e:
+        # Memory growth must be set before GPUs have been initialized
+        print(e)
+
 
 def scaled_dot_product_attention(q, k, v, mask=None):
     """アテンションの重みの計算
@@ -97,7 +109,7 @@ class MultiHeadAttention(layers.Layer):
 
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
-    def call(self, v, k, q, mask):
+    def call(self, v, k, q):
         batch_size = tf.shape(q)[0]
 
         q = self.wq(q)  # (batch_size, seq_len, d_model)
@@ -114,7 +126,7 @@ class MultiHeadAttention(layers.Layer):
         # scaled_attention.shape == (batch_size, num_heads, seq_len_q, depth)
         # attention_weights.shape == (batch_size, num_heads, seq_len_q, seq_len_k)
         scaled_attention, attention_weights = scaled_dot_product_attention(
-            q, k, v, mask)
+            q, k, v)
 
         # (batch_size, seq_len_q, num_heads, depth)
         scaled_attention = tf.transpose(scaled_attention, perm=[0, 2, 1, 3])
@@ -127,6 +139,54 @@ class MultiHeadAttention(layers.Layer):
         output = self.dense(concat_attention)
 
         return output, attention_weights
+
+
+class OutputLayer(layers.Layer):
+    def __init__(self, vector_dims, num_heads, inner_dims):
+        super(OutputLayer, self).__init__()
+
+        self.mha = MultiHeadAttention(vector_dims, num_heads)
+        self.ffn = point_wise_feed_forward_network(vector_dims, inner_dims)
+
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+
+    def call(self, x):
+
+        # (batch_size, input_seq_len, d_model)
+        attn_output, _ = self.mha(x, x, x)
+        # (batch_size, input_seq_len, d_model)
+        out1 = self.layernorm1(x + attn_output)
+
+        ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
+        # (batch_size, input_seq_len, d_model)
+        out2 = self.layernorm2(out1 + ffn_output)
+
+        return out2
+
+
+class TransformerBase(layers.Layer):
+    def __init__(self, num_layer_loops, vector_dims,
+                 num_heads, inner_dims):
+        super(TransformerBase, self).__init__()
+
+        self.num_layer_loops = num_layer_loops
+        self.vector_dims = vector_dims
+        self.num_heads = num_heads
+        self.inner_dims = inner_dims
+
+        self.cls_embedding = layers.Embedding(1, vector_dims)
+
+        self.enc_layers = [OutputLayer(vector_dims, num_heads, inner_dims)
+                           for _ in range(num_layer_loops)]
+
+    def add_cls(self, x, batch_size):
+        cls = self.cls_embedding(0)
+        cls = tf.reshape(cls, (1, 1, -1))
+        cls = tf.tile(cls, [batch_size, 1, 1])
+        x = tf.concat([cls, x], axis=1)
+
+        return x
 
 
 class EncoderLayer(layers.Layer):
@@ -243,6 +303,23 @@ class BTC_Transformer(tf.keras.Model):
         return self.output_layer(x)
 
 
+class FX_Transformer(TransformerBase):
+    def __init__(self, seq_len, num_layer_loops, vector_dims, num_heads, inner_dims):
+        super(FX_Transformer, self).__init__(num_layer_loops,
+                                             vector_dims,
+                                             num_heads,
+                                             inner_dims)
+
+        self.num_layer_loops = num_layer_loops
+        self.pos_encoding = positional_encoding(seq_len, vector_dims)
+
+    def call(self, x):
+        for i in range(self.num_layer_loops):
+            x += self.enc_layers[i](x)
+
+        return x
+
+
 class SelfAttention(layers.Layer):
     def __init__(self, output_shape, act='relu'):
         super(SelfAttention, self).__init__()
@@ -282,16 +359,22 @@ class Conv1DAttention(layers.Layer):
         return x
 
 
-class TimeSeriesModel(tf.keras.Model):
-    def __init__(self):
-        super(TimeSeriesModel, self).__init__()
+class LizaTransformer(tf.keras.Model):
+    def __init__(self, seq_len):
+        super(LizaTransformer, self).__init__()
+        feature_dim = 32
+
         self.conv01 = layers.Conv1D(
-            filters=64, kernel_size=3, activation='relu')
+            filters=feature_dim, kernel_size=3, activation='relu')
         self.conv02 = layers.Conv1D(
-            filters=32, kernel_size=3, activation='relu')
+            filters=feature_dim, kernel_size=3, activation='relu')
+        self.conv03 = layers.Conv1D(
+            filters=feature_dim, kernel_size=3, activation='relu')
 
-        self.flatten = layers.Flatten()
+        self.fx_transfomer = FX_Transformer(
+            seq_len, 1, feature_dim, 4, feature_dim)
 
+        self.dense_volatility = layers.Dense(feature_dim)
         self.dense01 = layers.Dense(200, activation='relu')
         self.dense02 = layers.Dense(100, activation='relu')
 
@@ -302,10 +385,43 @@ class TimeSeriesModel(tf.keras.Model):
 
         self.output_layer = layers.Dense(2, activation='softmax')
 
+    def normalize(self, x):
+        mx = tf.reduce_max(x, axis=1, keepdims=True)
+        mn = tf.reduce_min(x, axis=1, keepdims=True)
+
+        normed = (x-mn)/(mx-mn)
+        normed = tf.where(tf.math.is_finite(normed), normed, 0.0)
+
+        return normed
+
+    def ret_volatility(self, x):
+        std = tf.math.reduce_std(x, axis=1)
+        volatility = std/x[:, -1]
+
+        return volatility
+
+    def ret_rolled_differ(self, x, roll_ratio):
+        roll_num = int(x.shape[1]/roll_ratio)
+        diff = (x - tf.roll(x, roll_num, axis=1))[:, roll_num:]
+
+        return diff
+
     def call(self, x):
-        x = self.conv01(x)
-        x = self.conv02(x)
-        x = self.flatten(x)
+        volatility = self.ret_volatility(x)
+        volatility = self.dense_volatility(volatility)
+
+        x = self.normalize(x)
+        x1 = self.conv01(tf.expand_dims(x[:, :, 0], axis=2))
+        x2 = self.conv02(tf.expand_dims(x[:, :, 1], axis=2))
+        x3 = self.conv03(tf.expand_dims(x[:, :, 1], axis=2))
+
+        x = x1 + x2 + x3
+
+        x = self.fx_transfomer(x)
+
+        x = x[:, -1]
+
+        x = x + volatility
 
         x = self.dense01(x)
         x = self.dense02(x)

@@ -1,5 +1,5 @@
 # %%
-import liza_transformer
+import liza_models
 import trainer
 import numpy as np
 import pandas as pd
@@ -13,7 +13,7 @@ class ModelTrainer:
         self.k = k
         self.pr_k = pr_k
 
-    def run_train(self, weights_save_name, batch_size,
+    def run_train(self, seq_len, weights_save_name, batch_size,
                   per_batch=1, repeats=1, break_epochs=5):
 
         os.makedirs(weights_save_name, exist_ok=True)
@@ -23,7 +23,7 @@ class ModelTrainer:
 
         # 指定した反復回数でモデルのトレーニングを実行
         for repeat in range(repeats):
-            model = liza_transformer.TimeSeriesModel()
+            model = liza_models.LizaTransformer(seq_len)
 
             # データとモデルを用いてトレーニングのセッションを初期化
             liza_trainer = trainer.LizaTrainer(model, weight_name, batch_size,
@@ -47,15 +47,17 @@ class ModelTrainer:
 
 
 # %%
-k = 30
-pr_k = 10
+symbol = 'BTCJPY'
 
-btc_hist_path = 'D:/documents/hist_data/symbol/BTCJPY/1m.csv'
-df = pd.read_csv(btc_hist_path)
-hist = np.array(df['price'], dtype='int32')
+k = 24
+pr_k = 12
+
+hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+df = pd.read_csv(hist_path)
+hist = np.array(df['price'], dtype='float32')
 
 
-m_lis = [10, 15, 30]
+m_lis = [15, 30, 45]
 base_m = m_lis[0]
 
 st = ''
@@ -63,13 +65,13 @@ for i in m_lis:
     st += str(i) + '_'
 st = st[:-1]
 
-weight_name = 'weights/BTCJPY/k{}_prk{}_basem{}_mlis{}'.format(
-    k, pr_k, base_m, st)
+weight_name = 'weights/{}/k{}_prk{}_basem{}_mlis{}'.format(
+    symbol, k, pr_k, base_m, st)
 os.makedirs(weight_name, exist_ok=True)
 
 
 # %%
-batch_size = 120*1500
+batch_size = 120*300
 liza_trainer = ModelTrainer(hist, m_lis, k, pr_k,)
-liza_trainer.run_train('weight_name', batch_size, repeats=1000)
+liza_trainer.run_train(k, weight_name, batch_size, repeats=1000)
 # %%

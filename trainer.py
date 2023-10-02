@@ -18,6 +18,59 @@ if gpus:
         print(e)
 
 
+class DynamicLRScheduler:
+    def __init__(self, optimizer, increase_factor=1.05, decrease_factor=0.95, min_lr=1e-6, max_lr=0.1, verbose=True):
+        self.optimizer = optimizer
+        self.increase_factor = increase_factor
+        self.decrease_factor = decrease_factor
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.verbose = verbose
+
+        self.prev_val_loss = float('inf')
+        self.prev_loss_delta = float('inf')
+        # None: initial state, True: increased last epoch, False: decreased last epoch
+        self.increased_lr_last_epoch = None
+
+    def on_epoch_end(self, val_loss):
+        # 損失の減少量を計算
+        loss_delta = self.prev_val_loss - val_loss
+
+        if self.increased_lr_last_epoch is None:  # 初回のエポック
+            new_lr = self.optimizer.learning_rate.numpy()
+
+        elif self.increased_lr_last_epoch and loss_delta < self.prev_loss_delta:
+            # 前のエポックで学習率を上げて、損失の減少が小さくなった場合
+            new_lr = self.optimizer.learning_rate.numpy() * self.decrease_factor
+            self.increased_lr_last_epoch = False
+
+        elif self.increased_lr_last_epoch and loss_delta > self.prev_loss_delta:
+            # 前のエポックで学習率を上げて、損失の減少が大きくなった場合
+            new_lr = self.optimizer.learning_rate.numpy() * self.increase_factor
+            self.increased_lr_last_epoch = True
+
+        elif not self.increased_lr_last_epoch and loss_delta < self.prev_loss_delta:
+            # 前のエポックで学習率を下げて、損失の減少が小さくなった場合
+            new_lr = self.optimizer.learning_rate.numpy() * self.increase_factor
+            self.increased_lr_last_epoch = True
+
+        elif not self.increased_lr_last_epoch and loss_delta > self.prev_loss_delta:
+            # 前のエポックで学習率を下げて、損失の減少が大きくなった場合
+            new_lr = self.optimizer.learning_rate.numpy() * self.decrease_factor
+            self.increased_lr_last_epoch = False
+
+        # 学習率をmin_lrとmax_lrの間に収める
+        new_lr = min(max(new_lr, self.min_lr), self.max_lr)
+
+        if self.verbose:
+            print(f"Adjusting learning rate to {new_lr:.5f}.")
+        self.optimizer.learning_rate.assign(new_lr)
+
+        # 前の損失値と損失減少量を更新
+        self.prev_val_loss = val_loss
+        self.prev_loss_delta = loss_delta
+
+
 class GradualDecaySchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     """
     徐々に学習率を減少させるカスタムスケジュールクラス。
@@ -206,6 +259,13 @@ class Trainer(LizaDataSet):
 
             if epoch - self.last_epoch >= break_epochs or self.temp_val_loss == 0:
                 break
+
+            if epoch == 0:
+                first_acc = self.temp_val_acc
+
+            elif epoch == 10:
+                if first_acc == self.temp_val_acc:
+                    break
 
         self.model.set_weights(self.temp_weights)
         test_acc, test_loss = self.ret_acc_loss()

@@ -100,7 +100,7 @@ def ret_data_y(hist, m_lis, base_m, k, pr_k):
 
 
 def ret_data_xy(hist, m_lis, base_m, k, pr_k,
-                norm=True, y_mode='onehot'):
+                norm=False, y_mode='onehot'):
     """
     ヒストリカルデータから入力Xと目的のYデータを取得する関数。
 
