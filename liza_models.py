@@ -334,29 +334,36 @@ class SelfAttention(layers.Layer):
         return x
 
 
-class Conv1DAttention(layers.Layer):
-    def __init__(self, output_shape, act='relu'):
-        super(Conv1DAttention, self).__init__()
+class OutputLayers(layers.Layer):
+    def __init__(self):
+        super(OutputLayers, self).__init__()
 
-        self.conv01 = layers.Conv1D(
-            filters=64, kernel_size=9, activation='relu')
-        self.conv02 = layers.Conv1D(
-            filters=32, kernel_size=9, activation='relu')
+        self.dense01 = layers.Dense(250, activation='relu')
+        self.dense02 = layers.Dense(250, activation='relu')
 
-        self.flatten = layers.Flatten()
+        self.dense03 = layers.Dense(150, activation='relu')
+        self.dense04 = layers.Dense(150, activation='relu')
 
-        self.dense01 = layers.Dense(output_shape*2, activation='relu')
-        self.dense02 = layers.Dense(output_shape, activation=act)
+        self.dense05 = layers.Dense(50, activation='relu')
+        self.dense06 = layers.Dense(50, activation='relu')
+
+        self.dense07 = layers.Dense(25, activation='relu')
+        self.dense08 = layers.Dense(25, activation='relu')
 
     def call(self, x):
-        x = self.conv01(x)
-        x = self.conv02(x)
-        x = self.flatten(x)
-
         x = self.dense01(x)
-        x = self.dense02(x)
+        x_ = self.dense02(x)
 
-        return x
+        x = self.dense03(x + x_)
+        x_ = self.dense04(x)
+
+        x = self.dense05(x + x_)
+        x_ = self.dense06(x)
+
+        x = self.dense06(x + x_)
+        x_ = self.dense07(x)
+
+        return x_
 
 
 class LizaTransformer(tf.keras.Model):
@@ -373,21 +380,23 @@ class LizaTransformer(tf.keras.Model):
 
         self.fx_transfomer = FX_Transformer(
             seq_len, 1, feature_dim, 4, feature_dim)
+        self.flatten = layers.Flatten()
 
-        self.dense_volatility = layers.Dense(feature_dim)
-        self.dense01 = layers.Dense(200, activation='relu')
-        self.dense02 = layers.Dense(100, activation='relu')
+        # self.dense_volatility = layers.Dense(feature_dim)
 
-        self.dense03 = layers.Dense(100, activation='relu')
-        self.dense04 = layers.Dense(100, activation='relu')
-        self.dense05 = layers.Dense(100, activation='relu')
-        self.dense06 = layers.Dense(100, activation='relu')
+        self.dence_layer = OutputLayers()
 
         self.output_layer = layers.Dense(2, activation='softmax')
 
-    def normalize(self, x):
-        mx = tf.reduce_max(x, axis=1, keepdims=True)
-        mn = tf.reduce_min(x, axis=1, keepdims=True)
+    def normalize(self, x, mode=0):
+        if mode == 0:
+            mx = tf.reduce_max(x, axis=1, keepdims=True)
+            mn = tf.reduce_min(x, axis=1, keepdims=True)
+        else:
+            mx = tf.reduce_max(tf.reduce_max(
+                x, axis=1, keepdims=True), axis=2, keepdims=True)
+            mn = tf.reduce_min(tf.reduce_min(
+                x, axis=1, keepdims=True), axis=2, keepdims=True)
 
         normed = (x-mn)/(mx-mn)
         normed = tf.where(tf.math.is_finite(normed), normed, 0.0)
@@ -407,29 +416,16 @@ class LizaTransformer(tf.keras.Model):
         return diff
 
     def call(self, x):
-        volatility = self.ret_volatility(x)
-        volatility = self.dense_volatility(volatility)
+        norm01 = self.normalize(x, mode=0)
+        x = self.normalize(x, mode=1)
+        x1 = self.conv01(x)
+        x2 = self.conv02(tf.expand_dims(norm01[:, :, 0], axis=2))
+        x3 = self.conv03(tf.expand_dims(norm01[:, :, -1], axis=2))
 
-        x = self.normalize(x)
-        x1 = self.conv01(tf.expand_dims(x[:, :, 0], axis=2))
-        x2 = self.conv02(tf.expand_dims(x[:, :, 1], axis=2))
-        x3 = self.conv03(tf.expand_dims(x[:, :, 1], axis=2))
-
-        x = x1 + x2 + x3
-
-        x = self.fx_transfomer(x)
+        x = self.fx_transfomer(x1 + x2 + x3)
 
         x = x[:, -1]
 
-        x = x + volatility
-
-        x = self.dense01(x)
-        x = self.dense02(x)
-
-        x_ = self.dense03(x)
-        x = self.dense04(x) + x_
-
-        x_ = self.dense05(x)
-        x = self.dense06(x) + x_
+        x = self.dence_layer(x)
 
         return self.output_layer(x)

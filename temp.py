@@ -11,12 +11,13 @@ symbol = 'BTCJPY'
 k = 72
 pr_k = 12
 
-hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+hist_path = '1m.csv'
 df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
+hist = np.array(np.arange(len(df['price'])), dtype='int32')
 
 
-m_lis = [5, 10]
+m_lis = [15, 90]
 base_m = m_lis[0]
 
 batch_size = 120*50
@@ -35,12 +36,6 @@ normed = (x-mn)/(mx-mn)
 normed = tf.where(tf.math.is_finite(normed), normed, 0.0)
 normed
 # %%
-std = tf.math.reduce_std(x, axis=1)
+mx = tf.reduce_max(tf.reduce_max(x, axis=1, keepdims=True), axis=2, keepdims=True)
+mn = tf.reduce_min(tf.reduce_min(x, axis=1, keepdims=True), axis=2, keepdims=True)
 # %%
-x[:, -1]
-# %%
-roll01 = int(x.shape[1]/5)
-roll02 = int(x.shape[1]/2)
-# %%
-diff01 = (x - tf.roll(x, roll01, axis=1))[:, roll01:]
-diff02 = (x - tf.roll(x, roll02, axis=1))[:, roll02:]

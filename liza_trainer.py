@@ -49,10 +49,10 @@ class ModelTrainer:
 # %%
 symbol = 'BTCJPY'
 
-k = 24
+k = 12
 pr_k = 12
 
-hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+hist_path = '1m.csv'
 df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 
@@ -71,7 +71,7 @@ os.makedirs(weight_name, exist_ok=True)
 
 
 # %%
-batch_size = 120*300
+batch_size = 120*500
 liza_trainer = ModelTrainer(hist, m_lis, k, pr_k,)
 liza_trainer.run_train(k, weight_name, batch_size, repeats=1000)
 # %%
