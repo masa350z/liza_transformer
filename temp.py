@@ -1,10 +1,10 @@
 # %%
+from modules import modules
+from modules import models
 import tensorflow as tf
 import pandas as pd
 import numpy as np
-import liza_models
-import liza_module
-import trainer
+
 # %%
 symbol = 'BTCJPY'
 

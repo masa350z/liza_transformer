@@ -1,8 +1,8 @@
 # %%
+from modules import modules
+from modules import models
 import pandas as pd
 import numpy as np
-import liza_models
-import liza_module
 
 
 def ret_updn(pred, threshold):
@@ -53,7 +53,7 @@ weight_name = 'weights/{}/k{}_prk{}_basem{}_mlis{}'.format(
     symbol, k, pr_k, base_m, st)
 
 # %%
-model = liza_models.LizaTransformer(k)
+model = models.LizaTransformer(k)
 model.load_weights(weight_name + '/best_weights')
 # %%
 data_x, data_y = liza_module.ret_data_xy(
