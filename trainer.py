@@ -6,21 +6,6 @@ import numpy as np
 import os
 
 
-def ret_weight_name(symbol, k, pr_k, m_lis, y_mode='binary'):
-    st = ''
-    for i in m_lis:
-        st += str(i) + '_'
-    st = st[:-1]
-
-    weight_name = 'weights/{}/{}/k{}_prk{}_mlis{}'.format(y_mode,
-                                                          symbol,
-                                                          str(k).zfill(3),
-                                                          str(pr_k).zfill(3),
-                                                          str(st).zfill(3))
-
-    return weight_name
-
-
 def save_dataframe(weight_name, best_test_acc, best_test_loss):
     weights_df = pd.read_csv('weights/model_dic.csv', index_col=0)
 
@@ -54,6 +39,7 @@ class ModelTrainer:
         best_test_loss = float('inf')
         best_test_acc = 0
         last_repeat = 0
+        repeats_count = 0
 
         # 指定した反復回数でモデルのトレーニングを実行
         for repeat in range(repeats):
@@ -76,16 +62,19 @@ class ModelTrainer:
             test_acc, test_loss = liza_trainer.run_train(
                 per_batch, break_epochs=break_epochs)
 
-            # 最も良いtest_dataの損失を更新
-            if test_loss < best_test_loss:
-                best_test_loss = test_loss
-                best_test_acc = test_acc
-                last_repeat = repeat
+            if test_acc != 0:
+                # 最も良いtest_dataの損失を更新
+                if test_loss < best_test_loss:
+                    best_test_loss = test_loss
+                    best_test_acc = test_acc
+                    last_repeat = repeats_count
 
-                # トレーニング後のモデルの重みを保存
-                liza_trainer.model.save_weights(liza_trainer.weight_name)
+                    # トレーニング後のモデルの重みを保存
+                    liza_trainer.model.save_weights(liza_trainer.weight_name)
 
-            if repeat - last_repeat >= break_repeats:
+                repeats_count += 1
+
+            if repeats_count - last_repeat >= break_repeats:
                 break
 
         return best_test_acc, best_test_loss
@@ -105,7 +94,12 @@ for k, batch_size in [[12, 120*1000], [24, 120*500]]:
     for base_m in [5, 10, 15, 30, 60, 120]:
         m_lis = [base_m, base_m*2, base_m*3]
 
-        weight_name = ret_weight_name(symbol, k, pr_k, m_lis, y_mode=y_mode)
+        weight_name = modules.ret_weight_name(symbol=symbol,
+                                              k=k,
+                                              pr_k=pr_k,
+                                              m_lis=m_lis,
+                                              y_mode=y_mode)
+
         os.makedirs(weight_name, exist_ok=True)
 
         liza_trainer = ModelTrainer(hist, m_lis, k, pr_k,)

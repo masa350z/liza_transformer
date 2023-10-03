@@ -122,6 +122,15 @@ def ret_data_y(hist, m_lis, base_m, k, pr_k, threshold=0.3):
     return y_diff, y_one_hot, y_updn
 
 
+def ret_future_y(hist, m_lis, base_m, k, pr_k):
+    y_2d = ret_long_hist2d(hist, k+pr_k, base_m)  # 拡張ヒストリカルデータを取得する。
+    y_2d = y_2d[(k-1)*(max(m_lis)-base_m):]  # 必要な部分だけスライスする。
+    y_2d = y_2d[::base_m]  # 基準のストライドでダウンサンプリングする。
+    y_2d = y_2d[:, k-1:]  # k以降の部分だけを取得する。
+
+    return y_2d
+
+
 def ret_data_xy(hist, m_lis, base_m, k, pr_k,
                 norm=False, y_mode='binary'):
     """
@@ -175,6 +184,21 @@ def split_data(inp, tr_rate=0.6, val_rate=0.2):
     return train, valid, test
 
 
+def ret_weight_name(symbol, k, pr_k, m_lis, y_mode='binary'):
+    st = ''
+    for i in m_lis:
+        st += str(i) + '_'
+    st = st[:-1]
+
+    weight_name = 'weights/{}/{}/k{}_prk{}_mlis{}'.format(y_mode,
+                                                          symbol,
+                                                          str(k).zfill(3),
+                                                          str(pr_k).zfill(3),
+                                                          str(st).zfill(3))
+
+    return weight_name
+
+
 class GradualDecaySchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     """
     徐々に学習率を減少させるカスタムスケジュールクラス。
@@ -213,6 +237,26 @@ class LizaDataSet:
         self.train_dataset = train_dataset.batch(batch_size)
         self.valid_dataset = valid_dataset.batch(batch_size)
         self.test_dataset = test_dataset.batch(batch_size)
+
+    def ret_data_array(self, hist, m_lis, k, pr_k, base_m=None):
+        if base_m is None:
+            base_m = m_lis[0]
+
+        data_x, data_y = ret_data_xy(
+            hist, m_lis, base_m, k, pr_k, y_mode=self.y_mode)
+        dataset_size = len(data_x)
+        self.train_size = int(self.train_rate * dataset_size)
+        self.val_size = int(self.valid_rate * dataset_size)
+
+        train_datax = data_x[:self.train_size]
+        valid_datax = data_x[self.train_size + self.val_size:]
+        test_datax = data_x[self.train_size + self.val_size:]
+
+        train_datay = data_y[:self.train_size]
+        valid_datay = data_y[self.train_size + self.val_size:]
+        test_datay = data_y[self.train_size + self.val_size:]
+
+        return [train_datax, valid_datax, test_datax], [train_datay, valid_datay, test_datay]
 
     def ret_dataset(self, hist, m_lis, k, pr_k, base_m=None):
         if base_m is None:
@@ -365,6 +409,8 @@ class Trainer(LizaDataSet):
         self.temp_val_acc = 0
         self.last_epoch = 0
 
+        break_repeats = 5
+
         for epoch in range(epochs):
             self.run_mono_train(epoch, per_batch)
 
@@ -374,14 +420,18 @@ class Trainer(LizaDataSet):
             if epoch == 0:
                 first_acc = self.temp_val_acc
 
-            elif epoch == 5:
+            elif epoch == break_repeats:
                 if first_acc == self.temp_val_acc:
                     break
 
-        self.model.set_weights(self.temp_weights)
-        test_acc, test_loss = self.ret_acc_loss()
+        if epoch != break_repeats:
+            self.model.set_weights(self.temp_weights)
+            test_acc, test_loss = self.ret_acc_loss()
 
-        return test_acc, test_loss
+            return test_acc, test_loss
+
+        else:
+            return 0, float('inf')
 
     def ret_acc_loss(self):
         prediction, one_hot_label = self.ret_prediction_onehot(
