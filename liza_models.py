@@ -3,7 +3,6 @@ from keras import layers
 import tensorflow as tf
 import numpy as np
 
-# tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
@@ -40,8 +39,6 @@ class FX_Transformer(layers.Layer):
 
         self.num_layer_loops = num_layer_loops
         self.vector_dims = vector_dims
-        self.num_heads = num_heads
-        self.inner_dims = inner_dims
 
         self.mha = tf.keras.layers.MultiHeadAttention(
             num_heads=num_heads,
@@ -104,54 +101,46 @@ class OutputLayers(layers.Layer):
         super(OutputLayers, self).__init__()
 
         self.dense01 = layers.Dense(250, activation='relu')
-        self.dense02 = layers.Dense(250, activation='relu')
-
-        self.dense03 = layers.Dense(150, activation='relu')
-        self.dense04 = layers.Dense(150, activation='relu')
-
-        self.dense05 = layers.Dense(50, activation='relu')
-        self.dense06 = layers.Dense(50, activation='relu')
-
-        self.dense07 = layers.Dense(25, activation='relu')
-        self.dense08 = layers.Dense(25, activation='relu')
+        self.dense02 = layers.Dense(50, activation='relu')
 
     def call(self, x):
         x = self.dense01(x)
-        x_ = self.dense02(x)
+        x = self.dense02(x)
 
-        x = self.dense03(x + x_)
-        x_ = self.dense04(x)
-
-        x = self.dense05(x + x_)
-        x_ = self.dense06(x)
-
-        x = self.dense06(x + x_)
-        x_ = self.dense07(x)
-
-        return x_
+        return x
 
 
 class LizaTransformer(tf.keras.Model):
-    def __init__(self, seq_len):
+    def __init__(self, seq_len, out_dim):
         super(LizaTransformer, self).__init__()
         feature_dim = 32
+        kernel_size = 3
 
-        self.conv01 = layers.Conv1D(
-            filters=feature_dim, kernel_size=3, activation='relu')
-        self.conv02 = layers.Conv1D(
-            filters=feature_dim, kernel_size=3, activation='relu')
-        self.conv03 = layers.Conv1D(
-            filters=feature_dim, kernel_size=3, activation='relu')
+        self.conv01 = layers.Conv1D(filters=feature_dim,
+                                    kernel_size=kernel_size,
+                                    activation='relu')
 
-        self.fx_transfomer = FX_Transformer(
-            seq_len-2, 1, feature_dim, 4, feature_dim)
+        self.conv02 = layers.Conv1D(filters=feature_dim,
+                                    kernel_size=kernel_size,
+                                    activation='relu')
+
+        self.conv03 = layers.Conv1D(filters=feature_dim,
+                                    kernel_size=kernel_size,
+                                    activation='relu')
+
+        self.fx_transfomer = FX_Transformer(seq_len=seq_len-2,
+                                            num_layer_loops=1,
+                                            vector_dims=feature_dim,
+                                            num_heads=4,
+                                            inner_dims=feature_dim)
 
         self.dence_layer = OutputLayers()
-        self.output_layer = layers.Dense(2)
+        self.output_layer = layers.Dense(out_dim, activation='softmax')
 
     def call(self, x):
         norm01 = normalize(x, mode=0)
         x = normalize(x, mode=1)
+
         x1 = self.conv01(x)
         x2 = self.conv02(tf.expand_dims(norm01[:, :, 0], axis=2))
         x3 = self.conv03(tf.expand_dims(norm01[:, :, -1], axis=2))
@@ -160,7 +149,7 @@ class LizaTransformer(tf.keras.Model):
 
         x = x[:, -1]
 
-        x = self.dence_layer(tf.cast(x, tf.float32))
+        x = self.dence_layer(x)
         x = self.output_layer(x)
 
-        return layers.Activation('softmax', dtype='float32')(x)
+        return x

@@ -70,7 +70,7 @@ def ret_multi_hist(hist, k, m_lis):
     return hist_lis[::min(m_lis)]
 
 
-def ret_data_y(hist, m_lis, base_m, k, pr_k):
+def ret_data_y(hist, m_lis, base_m, k, pr_k, threshold=0.3):
     """
     ヒストリカルデータから目的のラベルデータを取得する関数。
 
@@ -92,15 +92,22 @@ def ret_data_y(hist, m_lis, base_m, k, pr_k):
     y_diff = y_2d[:, -1] - y_2d[:, 0]  # 予測期間の差分を計算する。
     y_one_hot = y_diff > 0  # 差分が正かどうかを判断する。
 
+    norm_y2d = normalize(y_2d)
+    up10 = norm_y2d[:, 0] > (1-threshold)
+    mid = (norm_y2d[:, 0] <= (1-threshold))*(norm_y2d[:, 0] >= threshold)
+    dn10 = norm_y2d[:, 0] < threshold
+
+    y_updn = np.stack([up10, mid, dn10], axis=1)
+
     d1 = np.expand_dims(y_one_hot*1, 1)
     d2 = (d1-1)*-1
     y_one_hot = np.concatenate([d1, d2], axis=1)
 
-    return y_diff, y_one_hot
+    return y_diff, y_one_hot, y_updn
 
 
 def ret_data_xy(hist, m_lis, base_m, k, pr_k,
-                norm=False, y_mode='onehot'):
+                norm=False, y_mode='binary'):
     """
     ヒストリカルデータから入力Xと目的のYデータを取得する関数。
 
@@ -110,22 +117,24 @@ def ret_data_xy(hist, m_lis, base_m, k, pr_k,
     - base_m (int): 基準となるストライド値。
     - k (int): ヒストリカルデータを考慮するデータポイントの数。
     - pr_k (int): 予測する先のデータポイント数。
-    - y_mode (str, optional): 返されるYデータの形式 ('onehot'または他の任意の値)。
+    - y_mode (str, optional): 返されるYデータの形式 ('binary'または他の任意の値)。
 
     戻り値:
     - multi_hist (np.array): 学習データ。
     - y_one_hot (np.array) or y_diff (np.array): ラベルデータ。
     """
     multi_hist = ret_multi_hist(hist, k, m_lis)
-    y_diff, y_one_hot = ret_data_y(hist, m_lis, base_m, k, pr_k)
+    y_diff, y_one_hot, y_updn = ret_data_y(hist, m_lis, base_m, k, pr_k)
 
     multi_hist = multi_hist[:len(y_one_hot)]
 
     if norm:
         multi_hist = normalize(multi_hist)
 
-    if y_mode == 'onehot':
+    if y_mode == 'binary':
         return multi_hist, y_one_hot
+    if y_mode == 'contrarian':
+        return multi_hist, y_updn
     else:
         return multi_hist, y_diff
 

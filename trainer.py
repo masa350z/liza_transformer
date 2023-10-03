@@ -44,10 +44,12 @@ class GradualDecaySchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 class LizaDataSet:
     def __init__(self, hist, m_lis, k, pr_k,
                  batch_size, base_m=None,
-                 train_rate=0.6, valid_rate=0.2):
+                 train_rate=0.6, valid_rate=0.2,
+                 y_mode='binary'):
 
         self.train_rate = train_rate
         self.valid_rate = valid_rate
+        self.y_mode = y_mode
 
         self.batch_size = batch_size
 
@@ -62,7 +64,8 @@ class LizaDataSet:
         if base_m is None:
             base_m = m_lis[0]
 
-        data_x, data_y = liza_module.ret_data_xy(hist, m_lis, base_m, k, pr_k)
+        data_x, data_y = liza_module.ret_data_xy(
+            hist, m_lis, base_m, k, pr_k, y_mode=self.y_mode)
         dataset_size = len(data_x)
         self.train_size = int(self.train_rate * dataset_size)
         self.val_size = int(self.valid_rate * dataset_size)
@@ -94,11 +97,13 @@ class Trainer(LizaDataSet):
                  hist, m_lis, k, pr_k, batch_size,
                  base_m=None,
                  train_rate=0.6, valid_rate=0.2,
-                 k_freeze=3, init_ratio=1e-4):
+                 k_freeze=3, init_ratio=1e-4,
+                 y_mode='binary'):
 
         super().__init__(hist, m_lis, k, pr_k,
                          batch_size, base_m,
-                         train_rate, valid_rate)
+                         train_rate, valid_rate,
+                         y_mode=y_mode)
 
         os.makedirs(weight_name, exist_ok=True)
         self.weight_name = weight_name + '/best_weights'
@@ -111,9 +116,9 @@ class Trainer(LizaDataSet):
         self.init_ratio = init_ratio
 
         self.temp_val_loss = float('inf')
-        self.best_val_loss = float('inf')
+        self.best_test_loss = float('inf')
         self.temp_val_acc = 0
-        self.best_val_acc = 0
+        self.best_test_acc = 0
 
         self.repeats = 0
 
@@ -195,11 +200,13 @@ class Trainer(LizaDataSet):
                 print(f"Epoch : {epoch + 1}")
                 print(f"Temp valid loss : {self.temp_val_loss:.8f}")
                 print(f"Temp valid acc  : {self.temp_val_acc:.8f}")
-                print(f"Best test  loss : {self.best_val_loss:.8f}")
-                print(f"Best test  acc  : {self.best_val_acc:.8f}")
+                print(f"Best test  loss : {self.best_test_loss:.8f}")
+                print(f"Best test  acc  : {self.best_test_acc:.8f}")
 
     def run_train(self, per_batch,
-                  epochs=100000000, break_epochs=5):
+                  epochs=100000000,
+                  break_epochs=5):
+
         self.temp_val_loss = float('inf')
         self.temp_val_acc = 0
         self.last_epoch = 0
@@ -213,7 +220,7 @@ class Trainer(LizaDataSet):
             if epoch == 0:
                 first_acc = self.temp_val_acc
 
-            elif epoch == 10:
+            elif epoch == 5:
                 if first_acc == self.temp_val_acc:
                     break
 
@@ -270,7 +277,7 @@ class Trainer(LizaDataSet):
                 trainer.model.save_weights(trainer.weight_name)
 
 
-class LizaTrainer(Trainer):
+class LizaTrainerBinary(Trainer):
     def __init__(self, model, weight_name, batch_size,
                  hist, m_lis, k, pr_k, base_m=None,
                  k_freeze=3, train_rate=0.6, valid_rate=0.2,
@@ -297,6 +304,51 @@ class LizaTrainer(Trainer):
     def calc_loss(self, prediction, label):
         # loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
         loss = tf.keras.losses.BinaryCrossentropy()(label, prediction)
+
+        return loss
+
+    def train_step(self, data_x, data_y):
+        with tf.GradientTape() as tape:
+            # 損失の計算
+            # loss = tf.keras.losses.CategoricalCrossentropy()(data_y[0], self.model(data_x))
+            loss = self.calc_loss(self.model(data_x), data_y)
+
+        # 勾配の計算と重みの更新
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(
+            zip(gradients, self.model.trainable_variables))
+
+        return loss
+
+
+class LizaTrainerContrarian(Trainer):
+    def __init__(self, model, weight_name, batch_size,
+                 hist, m_lis, k, pr_k, base_m=None,
+                 k_freeze=3, train_rate=0.6, valid_rate=0.2,
+                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=30):
+
+        super().__init__(model, weight_name,
+                         hist, m_lis, k, pr_k, batch_size,
+                         base_m,
+                         train_rate, valid_rate,
+                         k_freeze, init_ratio,
+                         y_mode='contrarian')
+
+        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
+
+    def calc_acurracy(self, prediction, label):
+        predicted_indices = tf.argmax(prediction, axis=1)
+        true_indices = tf.argmax(label, axis=1)
+
+        correct_predictions = tf.equal(predicted_indices, true_indices)
+        accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
+
+        return accuracy
+
+    def calc_loss(self, prediction, label):
+        loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
+        # loss = tf.keras.losses.BinaryCrossentropy()(label, prediction)
 
         return loss
 

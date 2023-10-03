@@ -31,7 +31,7 @@ def ret_kane_ratio(pred, y, threshold, sp, sp_mode='ratio'):
 
 
 # %%
-symbol = 'BTCJPY'
+symbol = 'EURUSD'
 
 k = 12
 pr_k = 12
@@ -41,7 +41,7 @@ df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 
 
-base_m = 5
+base_m = 15
 m_lis = [base_m, base_m*2, base_m*3]
 
 st = ''
