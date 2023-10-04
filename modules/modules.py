@@ -493,7 +493,7 @@ class LizaTrainerBinary(Trainer):
                          train_rate, valid_rate,
                          k_freeze, init_ratio)
 
-        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
+        self.optimizer = self.optimizer = tf.keras.optimizers.legacy.Adam(
             learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
 
     def calc_acurracy(self, prediction, label):
@@ -538,7 +538,7 @@ class LizaTrainerContrarian(Trainer):
                          k_freeze, init_ratio,
                          y_mode='contrarian')
 
-        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
+        self.optimizer = self.optimizer = tf.keras.optimizers.legacy.Adam(
             learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
 
     def calc_acurracy(self, prediction, label):

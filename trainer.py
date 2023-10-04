@@ -83,14 +83,14 @@ class ModelTrainer:
 # %%
 y_mode = 'binary'
 
-symbol = 'USDJPY'
-hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+symbol = 'BTCJPY'
+hist_path = '1m.csv'
 df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 
 k = 12
 pr_k = 12
-for k, batch_size in [[12, 120*1000], [24, 120*500]]:
+for k, batch_size in [[12, 120*500], [24, 120*250]]:
     for base_m in [5, 10, 15, 30, 60, 120]:
         m_lis = [base_m, base_m*2, base_m*3]
 
