@@ -61,7 +61,7 @@ hist = np.array(df['price'], dtype='float32')
 k = 12
 pr_k = 12
 
-base_m = 5
+base_m = 10
 m_lis = [base_m, base_m*2, base_m*3]
 
 weight_name = modules.ret_weight_name(symbol=symbol,
@@ -80,7 +80,7 @@ pred_valid = model.predict(dataset.valid_dataset)
 pred_test = model.predict(dataset.test_dataset)
 # %%
 spread_ratio = 0.05/100
-threshold = 0.55
+threshold = 0.5
 
 train_updn = ret_updn(pred_train, threshold)
 valid_updn = ret_updn(pred_valid, threshold)
