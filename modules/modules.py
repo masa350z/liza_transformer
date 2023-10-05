@@ -1,5 +1,7 @@
+from scipy.spatial import cKDTree
 import tensorflow as tf
 from tqdm import tqdm
+import pandas as pd
 import numpy as np
 import math
 import os
@@ -15,6 +17,61 @@ if gpus:
     except RuntimeError as e:
         # Memory growth must be set before GPUs have been initialized
         print(e)
+
+
+def ret_hist(symbol):
+    hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+    df = pd.read_csv(hist_path)
+    hist = np.array(df['price'], dtype='float32')
+    timestamp = np.array(df['timestamp'], dtype='int32')
+
+    return hist, timestamp
+
+
+def ret_multi_symbol_hist(symbol_list):
+    hist_lis, time_lis = [], []
+    for symbol in symbol_list:
+        hist, timestamp = ret_hist(symbol)
+
+        hist_lis.append(hist)
+        time_lis.append(timestamp)
+
+    # Convert lists to numpy arrays
+    time_lis0 = np.array(time_lis[0])
+    time_lis1 = np.array(time_lis[1])
+    time_lis2 = np.array(time_lis[2])
+
+    # Create KDTree for time_lis[1] and time_lis[2]
+    tree1 = cKDTree(time_lis1[:, np.newaxis])
+    tree2 = cKDTree(time_lis2[:, np.newaxis])
+
+    # Query the nearest point for each value in time_lis0
+    dist1, idx1 = tree1.query(time_lis0[:, np.newaxis], k=1)
+    dist2, idx2 = tree2.query(time_lis0[:, np.newaxis], k=1)
+
+    # Fetch the prices and time differences
+    price01_values = np.array(hist_lis[1])[idx1]
+    price02_values = np.array(hist_lis[2])[idx2]
+
+    hist_data = np.column_stack(
+        (time_lis0, hist_lis[0], price01_values, price02_values))
+    # time_diff_lis = np.column_stack((dist1, dist2))
+
+    cut_pos = 0
+    for i in range(3):
+        temp_data = hist_data[:, i+1]
+        for j in range(len(temp_data)-1):
+            if temp_data[j+1] == temp_data[j]:
+                if j > cut_pos:
+                    cut_pos = j
+            else:
+                break
+
+    hist_data = hist_data[cut_pos:]
+    timestamp = hist_data[:, 0]
+    hist_data = hist_data[:, 1:]
+
+    return hist_data, timestamp
 
 
 def hist_conv2d(hist, k, m=1):
@@ -59,7 +116,7 @@ def ret_long_hist2d(hist, k, m):
     return hist_2d
 
 
-def ret_multi_hist(hist, k, m_lis):
+def ret_multi_length_hist(hist, k, m_lis):
     """
     複数のストライド値に基づいてヒストリカルデータの拡張版を作成する関数。
 
@@ -148,20 +205,20 @@ def ret_data_xy(hist, m_lis, base_m, k, pr_k,
     - multi_hist (np.array): 学習データ。
     - y_one_hot (np.array) or y_diff (np.array): ラベルデータ。
     """
-    multi_hist = ret_multi_hist(hist, k, m_lis)
+    multi_length_hist = ret_multi_length_hist(hist, k, m_lis)
     y_diff, y_one_hot, y_updn = ret_data_y(hist, m_lis, base_m, k, pr_k)
 
-    multi_hist = multi_hist[:len(y_one_hot)]
+    multi_length_hist = multi_length_hist[:len(y_one_hot)]
 
     if norm:
-        multi_hist = normalize(multi_hist)
+        multi_length_hist = normalize(multi_length_hist)
 
     if y_mode == 'binary':
-        return multi_hist, y_one_hot
+        return multi_length_hist, y_one_hot
     if y_mode == 'contrarian':
-        return multi_hist, y_updn
+        return multi_length_hist, y_updn
     else:
-        return multi_hist, y_diff
+        return multi_length_hist, y_diff
 
 
 def normalize(hist_data_2d):
@@ -262,14 +319,36 @@ class LizaDataSet:
         if base_m is None:
             base_m = m_lis[0]
 
-        data_x, data_y = ret_data_xy(
-            hist, m_lis, base_m, k, pr_k, y_mode=self.y_mode)
-        dataset_size = len(data_x)
-        self.train_size = int(self.train_rate * dataset_size)
-        self.val_size = int(self.valid_rate * dataset_size)
+        if len(hist.shape) == 1:
+            data_x, data_y = ret_data_xy(
+                hist, m_lis, base_m, k, pr_k, y_mode=self.y_mode)
 
-        train_x, valid_x, test_x = self.ret_dataset_xy(data_x)
-        train_y, valid_y, test_y = self.ret_dataset_xy(data_y)
+            dataset_size = len(data_x)
+            self.train_size = int(self.train_rate * dataset_size)
+            self.val_size = int(self.valid_rate * dataset_size)
+
+            train_x, valid_x, test_x = self.ret_splited_dataset(data_x)
+            train_y, valid_y, test_y = self.ret_splited_dataset(data_y)
+        else:
+            data_x01, data_y = ret_data_xy(
+                hist[:, 0], m_lis, base_m, k, pr_k, y_mode=self.y_mode)
+            data_x02, _ = ret_data_xy(
+                hist[:, 1], m_lis, base_m, k, pr_k, y_mode=self.y_mode)
+            data_x03, _ = ret_data_xy(
+                hist[:, 2], m_lis, base_m, k, pr_k, y_mode=self.y_mode)
+
+            dataset_size = len(data_x01)
+            self.train_size = int(self.train_rate * dataset_size)
+            self.val_size = int(self.valid_rate * dataset_size)
+
+            train_x01, valid_x01, test_x01 = self.ret_splited_dataset(data_x01)
+            train_x02, valid_x02, test_x02 = self.ret_splited_dataset(data_x02)
+            train_x03, valid_x03, test_x03 = self.ret_splited_dataset(data_x03)
+            train_y, valid_y, test_y = self.ret_splited_dataset(data_y)
+
+            train_x = tf.data.Dataset.zip((train_x01, train_x02, train_x03))
+            valid_x = tf.data.Dataset.zip((valid_x01, valid_x02, valid_x03))
+            test_x = tf.data.Dataset.zip((test_x01, test_x02, test_x03))
 
         train_dataset = tf.data.Dataset.zip((train_x, train_y))
         valid_dataset = tf.data.Dataset.zip((valid_x, valid_y))
@@ -277,7 +356,7 @@ class LizaDataSet:
 
         return train_dataset, valid_dataset, test_dataset
 
-    def ret_dataset_xy(self, inp_data):
+    def ret_splited_dataset(self, inp_data):
         train_data = tf.data.Dataset.from_tensor_slices(
             inp_data[:self.train_size])
 
@@ -485,7 +564,7 @@ class LizaTrainerBinary(Trainer):
     def __init__(self, model, weight_name, batch_size,
                  hist, m_lis, k, pr_k, base_m=None,
                  k_freeze=3, train_rate=0.6, valid_rate=0.2,
-                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=30):
+                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=50):
 
         super().__init__(model, weight_name,
                          hist, m_lis, k, pr_k, batch_size,

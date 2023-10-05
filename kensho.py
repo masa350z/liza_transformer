@@ -31,7 +31,7 @@ def ret_kane_ratio(pred, y, threshold, sp, sp_mode='ratio'):
 
 
 # %%
-symbol = 'EURUSD'
+symbol = 'USDJPY'
 
 k = 12
 pr_k = 12
@@ -41,32 +41,30 @@ df = pd.read_csv(hist_path)
 hist = np.array(df['price'], dtype='float32')
 
 
-base_m = 15
+base_m = 10
 m_lis = [base_m, base_m*2, base_m*3]
 
-st = ''
-for i in m_lis:
-    st += str(i) + '_'
-st = st[:-1]
-
-weight_name = 'weights/{}/k{}_prk{}_basem{}_mlis{}'.format(
-    symbol, k, pr_k, base_m, st)
+weight_name = modules.ret_weight_name(symbol=symbol,
+                                      k=k,
+                                      pr_k=pr_k,
+                                      m_lis=m_lis,
+                                      y_mode='binary')
 
 # %%
-model = models.LizaTransformer(k)
+model = models.LizaTransformer(k, out_dim=2)
 model.load_weights(weight_name + '/best_weights')
 # %%
-data_x, data_y = liza_module.ret_data_xy(
+data_x, data_y = modules.ret_data_xy(
     hist, m_lis, base_m, k, pr_k, y_mode='diff')
 
-train_x, valid_x, test_x = liza_module.split_data(data_x)
-train_y, valid_y, test_y = liza_module.split_data(data_y)
+train_x, valid_x, test_x = modules.split_data(data_x)
+train_y, valid_y, test_y = modules.split_data(data_y)
 # %%
 pred_train = model.predict(train_x)
 pred_valid = model.predict(valid_x)
 pred_test = model.predict(test_x)
 # %%
-sp = 0.05/100
+sp = 0.05/100*0
 # sp = 0.5/100*0
 threshold = 0.5
 sp_mode = 'ratio'
@@ -86,3 +84,6 @@ kane, ratio = ret_kane_ratio(
 print(kane)
 print(ratio)
 # %%
+train_y
+# %%
+pred_train

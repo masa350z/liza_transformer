@@ -97,12 +97,9 @@ class OutputLayers(layers.Layer):
         return x
 
 
-class LizaTransformer(tf.keras.Model):
-    def __init__(self, seq_len, out_dim):
-        super(LizaTransformer, self).__init__()
-        feature_dim = 32
-        kernel_size = 3
-
+class MultiLengthConv(layers.Layer):
+    def __init__(self, feature_dim, kernel_size):
+        super(MultiLengthConv, self).__init__()
         self.conv01 = layers.Conv1D(filters=feature_dim,
                                     kernel_size=kernel_size,
                                     activation='relu')
@@ -115,15 +112,6 @@ class LizaTransformer(tf.keras.Model):
                                     kernel_size=kernel_size,
                                     activation='relu')
 
-        self.fx_transfomer = FX_Transformer(seq_len=seq_len-2,
-                                            num_layer_loops=1,
-                                            vector_dims=feature_dim,
-                                            num_heads=4,
-                                            inner_dims=feature_dim)
-
-        self.dence_layer = OutputLayers()
-        self.output_layer = layers.Dense(out_dim, activation='softmax')
-
     def call(self, x):
         norm01 = normalize(x, mode=0)
         x = normalize(x, mode=1)
@@ -132,8 +120,53 @@ class LizaTransformer(tf.keras.Model):
         x2 = self.conv02(tf.expand_dims(norm01[:, :, 0], axis=2))
         x3 = self.conv03(tf.expand_dims(norm01[:, :, -1], axis=2))
 
-        x = self.fx_transfomer(x1 + x2 + x3)
+        return x1 + x2 + x3
 
+
+class LizaTransformer(tf.keras.Model):
+    def __init__(self, seq_len, out_dim):
+        super(LizaTransformer, self).__init__()
+        self.feature_dim = 32
+        self.kernel_size = 3
+
+        self.conv01 = MultiLengthConv(self.feature_dim, self.kernel_size)
+
+        self.fx_transfomer = FX_Transformer(seq_len=seq_len-2,
+                                            num_layer_loops=1,
+                                            vector_dims=self.feature_dim,
+                                            num_heads=4,
+                                            inner_dims=self.feature_dim)
+
+        self.dence_layer = OutputLayers()
+        self.output_layer = layers.Dense(out_dim, activation='softmax')
+
+    def call(self, x):
+        x = self.conv01(x)
+        x = self.fx_transfomer(x)
+
+        x = x[:, -1]
+
+        x = self.dence_layer(x)
+        x = self.output_layer(x)
+
+        return x
+
+
+class LizaMultiTransformer(LizaTransformer):
+    def __init__(self, seq_len, out_dim):
+        super(LizaMultiTransformer, self).__init__(seq_len, out_dim)
+
+        self.conv02 = MultiLengthConv(self.feature_dim, self.kernel_size)
+        self.conv03 = MultiLengthConv(self.feature_dim, self.kernel_size)
+
+    def call(self, x):
+        x1, x2, x3 = x
+
+        x1 = self.conv01(x1)
+        x2 = self.conv02(x2)
+        x3 = self.conv01(x3)
+
+        x = self.fx_transfomer(x1 + x2 + x3)
         x = x[:, -1]
 
         x = self.dence_layer(x)
