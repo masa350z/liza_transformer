@@ -218,7 +218,7 @@ def ret_data_xy(hist, m_lis, base_m, k, pr_k,
     if y_mode == 'contrarian':
         return multi_length_hist, y_updn
     else:
-        return multi_length_hist, y_diff
+        return multi_length_hist, np.stack([y_diff, -1*y_diff], axis=1)
 
 
 def normalize(hist_data_2d):
@@ -559,12 +559,25 @@ class Trainer(LizaDataSet):
                 # トレーニング後のモデルの重みを保存
                 trainer.model.save_weights(trainer.weight_name)
 
+    def train_step(self, data_x, data_y):
+        with tf.GradientTape() as tape:
+            # 損失の計算
+            # loss = tf.keras.losses.CategoricalCrossentropy()(data_y[0], self.model(data_x))
+            loss = self.calc_loss(self.model(data_x), data_y)
+
+        # 勾配の計算と重みの更新
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(
+            zip(gradients, self.model.trainable_variables))
+
+        return loss
+
 
 class LizaTrainerBinary(Trainer):
     def __init__(self, model, weight_name, batch_size,
                  hist, m_lis, k, pr_k, base_m=None,
                  k_freeze=3, train_rate=0.6, valid_rate=0.2,
-                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=50):
+                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=100):
 
         super().__init__(model, weight_name,
                          hist, m_lis, k, pr_k, batch_size,
@@ -587,19 +600,6 @@ class LizaTrainerBinary(Trainer):
     def calc_loss(self, prediction, label):
         # loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
         loss = tf.keras.losses.BinaryCrossentropy()(label, prediction)
-
-        return loss
-
-    def train_step(self, data_x, data_y):
-        with tf.GradientTape() as tape:
-            # 損失の計算
-            # loss = tf.keras.losses.CategoricalCrossentropy()(data_y[0], self.model(data_x))
-            loss = self.calc_loss(self.model(data_x), data_y)
-
-        # 勾配の計算と重みの更新
-        gradients = tape.gradient(loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(
-            zip(gradients, self.model.trainable_variables))
 
         return loss
 
@@ -635,15 +635,34 @@ class LizaTrainerContrarian(Trainer):
 
         return loss
 
-    def train_step(self, data_x, data_y):
-        with tf.GradientTape() as tape:
-            # 損失の計算
-            # loss = tf.keras.losses.CategoricalCrossentropy()(data_y[0], self.model(data_x))
-            loss = self.calc_loss(self.model(data_x), data_y)
 
-        # 勾配の計算と重みの更新
-        gradients = tape.gradient(loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(
-            zip(gradients, self.model.trainable_variables))
+class LizaTrainerDiffer(Trainer):
+    def __init__(self, model, weight_name, batch_size,
+                 hist, m_lis, k, pr_k, base_m=None,
+                 k_freeze=3, train_rate=0.6, valid_rate=0.2,
+                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=30):
 
-        return loss
+        super().__init__(model, weight_name,
+                         hist, m_lis, k, pr_k, batch_size,
+                         base_m,
+                         train_rate, valid_rate,
+                         k_freeze, init_ratio,
+                         y_mode='differ')
+
+        self.optimizer = self.optimizer = tf.keras.optimizers.Adam()
+
+    def calc_acurracy(self, prediction, label):
+        predicted_indices = tf.argmax(prediction, axis=1)
+        true_indices = tf.argmax(label, axis=1)
+
+        correct_predictions = tf.equal(predicted_indices, true_indices)
+        accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
+
+        return accuracy
+
+    def calc_loss(self, prediction, label, spread=0):
+        loss = prediction*label - spread
+        loss = tf.reduce_sum(loss, axis=1)
+        loss = tf.reduce_mean(loss)
+
+        return -1*loss

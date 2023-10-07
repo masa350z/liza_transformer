@@ -2,7 +2,6 @@
 from modules import modules
 from modules import models
 import pandas as pd
-import numpy as np
 import os
 
 
@@ -60,6 +59,14 @@ class ModelTrainer:
                 # データとモデルを用いてトレーニングのセッションを初期化
                 liza_trainer = modules.LizaTrainerContrarian(model, weight_name, batch_size,
                                                              self.hist, self.m_lis, self.k, self.pr_k)
+            elif y_mode == 'differ':
+                if len(self.hist.shape) == 1:
+                    model = models.LizaTransformer(seq_len, out_dim=2)
+                else:
+                    model = models.LizaMultiTransformer(seq_len, out_dim=2)
+                # データとモデルを用いてトレーニングのセッションを初期化
+                liza_trainer = modules.LizaTrainerDiffer(model, weight_name, batch_size,
+                                                         self.hist, self.m_lis, self.k, self.pr_k)
 
             liza_trainer.repeats = repeat
             liza_trainer.best_test_loss = best_test_loss
@@ -93,7 +100,7 @@ class ModelTrainer:
 
 
 # %%
-y_mode = 'binary'
+y_mode = 'differ'
 
 symbol_list = ['USDJPY', 'EURUSD', 'EURJPY']
 # symbol_list = ['EURUSD', 'USDJPY',  'EURJPY']
@@ -101,7 +108,7 @@ symbol_list = ['USDJPY', 'EURUSD', 'EURJPY']
 symbol = ''
 for s in symbol_list:
     symbol += s + '_'
-# symbol = symbol[:-1]
+symbol = symbol[:-1]
 # hist, timestamp = modules.ret_multi_symbol_hist(symbol_list)
 
 symbol = 'USDJPY'

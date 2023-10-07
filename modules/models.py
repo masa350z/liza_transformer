@@ -156,17 +156,13 @@ class LizaMultiTransformer(LizaTransformer):
     def __init__(self, seq_len, out_dim):
         super(LizaMultiTransformer, self).__init__(seq_len, out_dim)
 
-        self.conv02 = MultiLengthConv(self.feature_dim, self.kernel_size)
-        self.conv03 = MultiLengthConv(self.feature_dim, self.kernel_size)
-
     def call(self, x):
         x1, x2, x3 = x
+        x = tf.concat([x1, x2, x3], axis=2)
 
-        x1 = self.conv01(x1)
-        x2 = self.conv02(x2)
-        x3 = self.conv01(x3)
+        x = self.conv01(x)
 
-        x = self.fx_transfomer(x1 + x2 + x3)
+        x = self.fx_transfomer(x)
         x = x[:, -1]
 
         x = self.dence_layer(x)
