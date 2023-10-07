@@ -649,7 +649,8 @@ class LizaTrainerDiffer(Trainer):
                          k_freeze, init_ratio,
                          y_mode='differ')
 
-        self.optimizer = self.optimizer = tf.keras.optimizers.Adam()
+        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
 
     def calc_acurracy(self, prediction, label):
         predicted_indices = tf.argmax(prediction, axis=1)
