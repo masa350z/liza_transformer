@@ -256,6 +256,41 @@ def ret_weight_name(symbol, k, pr_k, m_lis, y_mode='binary'):
     return weight_name
 
 
+def half_updn(inp_x, inp_y):
+    up_y = inp_y[inp_y[:, 0] == 1]
+    dn_y = inp_y[inp_y[:, 1] == 1]
+
+    up_x = inp_x[inp_y[:, 0] == 1]
+    dn_x = inp_x[inp_y[:, 1] == 1]
+
+    diff = len(up_y) - len(dn_y)
+
+    if diff > 0:
+        index = np.arange(len(up_y))
+        np.random.shuffle(index)
+
+        up_y = up_y[index][:-diff]
+        up_x = up_x[index][:-diff]
+
+        y_ = np.concatenate([up_y, dn_y])
+        x_ = np.concatenate([up_x, dn_x])
+    elif diff < 0:
+        index = np.arange(len(dn_y))
+        np.random.shuffle(index)
+
+        dn_y = dn_y[index][:-diff]
+        dn_x = dn_x[index][:-diff]
+
+        y_ = np.concatenate([up_y, dn_y])
+        x_ = np.concatenate([up_x, dn_x])
+
+    else:
+        y_ = inp_y
+        x_ = inp_x
+
+    return x_, y_
+
+
 class GradualDecaySchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     """
     徐々に学習率を減少させるカスタムスケジュールクラス。
@@ -315,40 +350,30 @@ class LizaDataSet:
 
         return [train_datax, valid_datax, test_datax], [train_datay, valid_datay, test_datay]
 
-    def ret_dataset(self, hist, m_lis, k, pr_k, base_m=None):
+    def ret_dataset(self, hist, m_lis, k, pr_k, base_m=None, half=True):
         if base_m is None:
             base_m = m_lis[0]
 
-        if len(hist.shape) == 1:
-            data_x, data_y = ret_data_xy(
-                hist, m_lis, base_m, k, pr_k, y_mode=self.y_mode)
+        data_x, data_y = ret_data_xy(
+            hist, m_lis, base_m, k, pr_k, y_mode=self.y_mode)
 
-            dataset_size = len(data_x)
-            self.train_size = int(self.train_rate * dataset_size)
-            self.val_size = int(self.valid_rate * dataset_size)
+        dataset_size = len(data_x)
+        self.train_size = int(self.train_rate * dataset_size)
+        self.val_size = int(self.valid_rate * dataset_size)
 
-            train_x, valid_x, test_x = self.ret_splited_dataset(data_x)
-            train_y, valid_y, test_y = self.ret_splited_dataset(data_y)
-        else:
-            data_x01, data_y = ret_data_xy(
-                hist[:, 0], m_lis, base_m, k, pr_k, y_mode=self.y_mode)
-            data_x02, _ = ret_data_xy(
-                hist[:, 1], m_lis, base_m, k, pr_k, y_mode=self.y_mode)
-            data_x03, _ = ret_data_xy(
-                hist[:, 2], m_lis, base_m, k, pr_k, y_mode=self.y_mode)
+        train_x, valid_x, test_x = split_data(
+            data_x, self.train_rate, self.valid_rate)
+        train_y, valid_y, test_y = split_data(
+            data_y, self.train_rate, self.valid_rate)
 
-            dataset_size = len(data_x01)
-            self.train_size = int(self.train_rate * dataset_size)
-            self.val_size = int(self.valid_rate * dataset_size)
+        if half:
+            valid_x, valid_y = half_updn(valid_x, valid_y)
+            test_x, test_y = half_updn(test_x, test_y)
 
-            train_x01, valid_x01, test_x01 = self.ret_splited_dataset(data_x01)
-            train_x02, valid_x02, test_x02 = self.ret_splited_dataset(data_x02)
-            train_x03, valid_x03, test_x03 = self.ret_splited_dataset(data_x03)
-            train_y, valid_y, test_y = self.ret_splited_dataset(data_y)
-
-            train_x = tf.data.Dataset.zip((train_x01, train_x02, train_x03))
-            valid_x = tf.data.Dataset.zip((valid_x01, valid_x02, valid_x03))
-            test_x = tf.data.Dataset.zip((test_x01, test_x02, test_x03))
+        train_x, valid_x, test_x = self.convert_to_tensor_slices(
+            train_x, valid_x, test_x)
+        train_y, valid_y, test_y = self.convert_to_tensor_slices(
+            train_y, valid_y, test_y)
 
         train_dataset = tf.data.Dataset.zip((train_x, train_y))
         valid_dataset = tf.data.Dataset.zip((valid_x, valid_y))
@@ -356,15 +381,11 @@ class LizaDataSet:
 
         return train_dataset, valid_dataset, test_dataset
 
-    def ret_splited_dataset(self, inp_data):
-        train_data = tf.data.Dataset.from_tensor_slices(
-            inp_data[:self.train_size])
+    def convert_to_tensor_slices(self, train_d, valid_d, test_d):
 
-        valid_data = tf.data.Dataset.from_tensor_slices(
-            inp_data[self.train_size:self.train_size + self.val_size])
-
-        test_data = tf.data.Dataset.from_tensor_slices(
-            inp_data[self.train_size + self.val_size:])
+        train_data = tf.data.Dataset.from_tensor_slices(train_d)
+        valid_data = tf.data.Dataset.from_tensor_slices(valid_d)
+        test_data = tf.data.Dataset.from_tensor_slices(test_d)
 
         return train_data, valid_data, test_data
 

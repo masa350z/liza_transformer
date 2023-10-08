@@ -100,40 +100,26 @@ class ModelTrainer:
 
 
 # %%
-y_mode = 'differ'
-
-symbol_list = ['USDJPY', 'EURUSD', 'EURJPY']
-# symbol_list = ['EURUSD', 'USDJPY',  'EURJPY']
-# symbol_list = ['EURJPY', 'EURUSD', 'USDJPY']
-symbol = ''
-for s in symbol_list:
-    symbol += s + '_'
-symbol = symbol[:-1]
-# hist, timestamp = modules.ret_multi_symbol_hist(symbol_list)
-
+y_mode = 'binary'
 symbol = 'USDJPY'
-hist, timestamp = modules.ret_hist(symbol)
+for symbol in ['USDJPY', 'EURUSD']:
+    hist, timestamp = modules.ret_hist(symbol)
 
-k = 12
-pr_k = 12
-for pr_k in [12, 6]:
-    for k, batch_size in [[12, 120*1000], [24, 120*500], [36, 120*300]]:
-        # for k, batch_size in [[12, 120*500], [24, 120*250], [36, 120*150]]:
-        for base_m in [15, 30, 60, 120]:
-            # for base_m in [60, 120, 180, 240, 300, 360]:
-            # for base_m in [360, 480, 540, 600, 660, 720]:
-            m_lis = [base_m, base_m*2, base_m*3]
+    for pr_k in [12, 6]:
+        for k, batch_size in [[12, 120*1000], [24, 120*500], [36, 120*300]]:
+            for base_m in [3, 5, 10, 15, 30, 60, 120, 240, 360]:
+                m_lis = [base_m, base_m*2, base_m*3]
 
-            weight_name = modules.ret_weight_name(symbol=symbol,
-                                                  k=k,
-                                                  pr_k=pr_k,
-                                                  m_lis=m_lis,
-                                                  y_mode=y_mode)
+                weight_name = modules.ret_weight_name(symbol=symbol,
+                                                      k=k,
+                                                      pr_k=pr_k,
+                                                      m_lis=m_lis,
+                                                      y_mode=y_mode)
 
-            os.makedirs(weight_name, exist_ok=True)
+                os.makedirs(weight_name, exist_ok=True)
 
-            liza_trainer = ModelTrainer(hist, m_lis, k, pr_k,)
-            best_test_acc, best_test_loss = liza_trainer.run_train(
-                k, weight_name, batch_size, break_repeats=10)
+                liza_trainer = ModelTrainer(hist, m_lis, k, pr_k,)
+                best_test_acc, best_test_loss = liza_trainer.run_train(
+                    k, weight_name, batch_size, break_repeats=10)
 
-            save_dataframe(weight_name, best_test_acc, best_test_loss)
+                save_dataframe(weight_name, best_test_acc, best_test_loss)
