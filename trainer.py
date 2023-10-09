@@ -105,8 +105,8 @@ symbol = 'USDJPY'
 for symbol in ['USDJPY', 'EURUSD']:
     hist, timestamp = modules.ret_hist(symbol)
 
-    for pr_k in [12, 6]:
-        for k, batch_size in [[12, 120*1000], [24, 120*500], [36, 120*300]]:
+    for pr_k in [12]:
+        for k, batch_size in [[12, 120*1000]]:
             for base_m in [3, 5, 10, 15, 30, 60, 120, 240, 360]:
                 m_lis = [base_m, base_m*2, base_m*3]
 
