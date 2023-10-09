@@ -3,6 +3,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+import pickle
 import math
 import os
 
@@ -291,6 +292,52 @@ def half_updn(inp_x, inp_y):
     return x_, y_
 
 
+def half_updn_multi(future, raw, cos_sim, inp_y):
+    up_y = inp_y[inp_y[:, 0] == 1]
+    dn_y = inp_y[inp_y[:, 1] == 1]
+
+    up_future = future[inp_y[:, 0] == 1]
+    dn_future = future[inp_y[:, 1] == 1]
+
+    up_raw = raw[inp_y[:, 0] == 1]
+    dn_raw = raw[inp_y[:, 1] == 1]
+
+    up_cos = cos_sim[inp_y[:, 0] == 1]
+    dn_cos = cos_sim[inp_y[:, 1] == 1]
+
+    diff = len(up_y) - len(dn_y)
+
+    if diff > 0:
+        index = np.arange(len(up_y))
+        np.random.shuffle(index)
+
+        up_y = up_y[index][:-diff]
+        up_future = up_future[index][:-diff]
+        up_raw = up_raw[index][:-diff]
+        up_cos = up_cos[index][:-diff]
+
+        y_ = np.concatenate([up_y, dn_y])
+        future = np.concatenate([up_future, dn_future])
+        raw = np.concatenate([up_raw, dn_raw])
+        cos_sim = np.concatenate([up_cos, dn_cos])
+
+    elif diff < 0:
+        index = np.arange(len(dn_y))
+        np.random.shuffle(index)
+
+        dn_y = dn_y[index][:-diff]
+        dn_future = dn_future[index][:-diff]
+        dn_raw = dn_raw[index][:-diff]
+        dn_cos = dn_cos[index][:-diff]
+
+        y_ = np.concatenate([up_y, dn_y])
+        future = np.concatenate([up_future, dn_future])
+        raw = np.concatenate([up_raw, dn_raw])
+        cos_sim = np.concatenate([up_cos, dn_cos])
+
+    return future, raw, cos_sim, y_
+
+
 class GradualDecaySchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
     """
     徐々に学習率を減少させるカスタムスケジュールクラス。
@@ -390,6 +437,72 @@ class LizaDataSet:
         return train_data, valid_data, test_data
 
 
+class LizaSimilarDataset(LizaDataSet):
+    def __init__(self, symbol, k, pr_k, base_m,
+                 batch_size,
+                 train_rate=0.6, valid_rate=0.2,
+                 y_mode='binary'):
+
+        self.train_rate = train_rate
+        self.valid_rate = valid_rate
+        self.y_mode = y_mode
+
+        self.batch_size = batch_size
+
+        train_dataset, valid_dataset, test_dataset = \
+            self.ret_dataset(symbol, k, pr_k, base_m)
+
+        self.train_dataset = train_dataset.batch(batch_size)
+        self.valid_dataset = valid_dataset.batch(batch_size)
+        self.test_dataset = test_dataset.batch(batch_size)
+
+    def ret_dataset(self, symbol, k, pr_k, base_m):
+        data_path = 'datas/dataset/{}_k{}_pr{}_m{}.pickle'.format(
+            symbol, k, pr_k, base_m)
+
+        with open(data_path, 'rb') as f:
+            rawinput, future, cos_sim, binary = pickle.load(f)
+
+        tr_raw, vl_raw, te_raw = split_data(rawinput)
+        tr_future, vl_future, te_future = split_data(future)
+        tr_sim, vl_sim, te_sim = split_data(cos_sim)
+        tr_y, vl_y, te_y = split_data(binary)
+
+        vl_future, vl_raw, vl_sim, vl_y = half_updn_multi(
+            vl_future, vl_raw, vl_sim, vl_y)
+        te_future, te_raw, te_sim, te_y = half_updn_multi(
+            te_future, te_raw, te_sim, te_y)
+
+        self.train_size = int(self.train_rate * len(rawinput))
+        self.val_size = int(self.valid_rate * len(rawinput))
+
+        tr_raw = tf.data.Dataset.from_tensor_slices(tr_raw)
+        vl_raw = tf.data.Dataset.from_tensor_slices(vl_raw)
+        te_raw = tf.data.Dataset.from_tensor_slices(te_raw)
+
+        tr_future = tf.data.Dataset.from_tensor_slices(tr_future)
+        vl_future = tf.data.Dataset.from_tensor_slices(vl_future)
+        te_future = tf.data.Dataset.from_tensor_slices(te_future)
+
+        tr_sim = tf.data.Dataset.from_tensor_slices(tr_sim)
+        vl_sim = tf.data.Dataset.from_tensor_slices(vl_sim)
+        te_sim = tf.data.Dataset.from_tensor_slices(te_sim)
+
+        tr_y = tf.data.Dataset.from_tensor_slices(tr_y)
+        vl_y = tf.data.Dataset.from_tensor_slices(vl_y)
+        te_y = tf.data.Dataset.from_tensor_slices(te_y)
+
+        tr_x = tf.data.Dataset.zip((tr_raw, tr_future, tr_sim))
+        vl_x = tf.data.Dataset.zip((vl_raw, vl_future, vl_sim))
+        te_x = tf.data.Dataset.zip((te_raw, te_future, te_sim))
+
+        train_x = tf.data.Dataset.zip((tr_x, tr_y))
+        valid_x = tf.data.Dataset.zip((vl_x, vl_y))
+        test_x = tf.data.Dataset.zip((te_x, te_y))
+
+        return train_x, valid_x, test_x
+
+
 class Trainer(LizaDataSet):
     def __init__(self, model, weight_name,
                  hist, m_lis, k, pr_k, batch_size,
@@ -400,6 +513,210 @@ class Trainer(LizaDataSet):
 
         super().__init__(hist, m_lis, k, pr_k,
                          batch_size, base_m,
+                         train_rate, valid_rate,
+                         y_mode=y_mode)
+
+        os.makedirs(weight_name, exist_ok=True)
+        self.weight_name = weight_name + '/best_weights'
+
+        self.model = model
+
+        self.k_freeze = k_freeze
+        self.temp_weights = None
+        self.freeze, self.last_epoch = 0, 0
+        self.init_ratio = init_ratio
+
+        self.temp_val_loss = float('inf')
+        self.best_test_loss = float('inf')
+        self.temp_val_acc = 0
+        self.best_test_acc = 0
+
+        self.repeats = 0
+
+    def model_weights_random_init(self, init_ratio=1e-4):
+        weights = self.model.get_weights()
+
+        for i, weight in enumerate(weights):
+            if len(weight.shape) == 2:
+                # ランダムなマスクを作成して重みを初期化
+                rand_mask = np.random.binomial(
+                    1, init_ratio, size=weight.shape)
+                rand_weights = np.random.randn(*weight.shape) * rand_mask
+                weights[i] = weight * (1 - rand_mask) + rand_weights
+
+        self.model.set_weights(weights)
+
+    def ret_prediction_onehot(self, dataset):
+        prediction, one_hot_label = [], []
+        # データセットを反復処理して予測を行う
+        for x, y in tqdm(dataset):
+            prediction.append(self.model(x))
+            one_hot_label.append(y)
+
+        prediction = tf.concat(prediction, axis=0)
+        one_hot_label = tf.concat(one_hot_label, axis=0)
+
+        return prediction, one_hot_label
+
+    def run_mono_train(self, epoch, per_batch):
+        """
+        単一のトレーニングエポックを実行します。
+
+        Args:
+            epoch (int): 現在のエポック番号。
+            per_batch (int): メトリック計算間に処理するバッチ数。
+            acc_func (function): 検証精度を計算する関数。
+            loss_func (function): 検証損失を計算する関数。
+            init_ratio (float): モデルの重みのランダム初期化の割合。
+
+        Returns:
+            None
+        """
+        for (batch, (data_x, data_y)) in enumerate(self.train_dataset):
+            # 現在のバッチに対してトレーニンングステップを実行する
+            self.train_step(data_x, data_y)
+            steps = math.ceil(self.train_size/self.batch_size)
+            condition1 = (
+                batch+1) % int(steps/per_batch) == 0
+            if condition1 and (steps == 1 or (batch != 0)):
+                # バリデーションデータセットで予測を行う
+                prediction, one_hot_label = self.ret_prediction_onehot(
+                    self.valid_dataset)
+
+                # バリデーションの精度を計算する
+                val_acc = self.calc_acurracy(prediction, one_hot_label).numpy()
+                # バリデーションの損失を計算する
+                val_loss = self.calc_loss(prediction, one_hot_label).numpy()
+
+                if val_loss < self.temp_val_loss:
+                    # 現在の損失がより低い場合、最良のバリデーション損失と精度を更新する
+                    self.last_epoch = epoch
+                    self.freeze = 0
+                    self.temp_val_loss = val_loss
+                    self.temp_val_acc = val_acc
+                    self.temp_weights = self.model.get_weights()
+                else:
+                    if self.freeze == 0:
+                        # モデルの重みを以前に保存した最良の重みにリセットする
+                        self.model.set_weights(self.temp_weights)
+                        # モデルの重みを与えられた割合でランダムに初期化する
+                        self.model_weights_random_init(
+                            init_ratio=self.init_ratio)
+                        self.freeze = self.k_freeze
+
+                print('=================')
+                print(self.weight_name)
+                # トレーニング情報を表示する
+                print(f"Repeat : {self.repeats + 1}")
+                print(f"Epoch : {epoch + 1}")
+                print(f"Temp valid loss : {self.temp_val_loss:.8f}")
+                print(f"Temp valid acc  : {self.temp_val_acc:.8f}")
+                print(f"Best test  loss : {self.best_test_loss:.8f}")
+                print(f"Best test  acc  : {self.best_test_acc:.8f}")
+
+    def run_train(self, per_batch,
+                  epochs=100000000,
+                  break_epochs=5):
+
+        self.temp_val_loss = float('inf')
+        self.temp_val_acc = 0
+        self.last_epoch = 0
+
+        break_repeats = 5
+
+        for epoch in range(epochs):
+            self.run_mono_train(epoch, per_batch)
+
+            if epoch - self.last_epoch >= break_epochs or self.temp_val_loss == 0:
+                break
+
+            if epoch == 0:
+                first_acc = self.temp_val_acc
+
+            elif epoch == break_repeats:
+                if first_acc == self.temp_val_acc:
+                    break
+
+        if epoch != break_repeats:
+            self.model.set_weights(self.temp_weights)
+            test_acc, test_loss = self.ret_acc_loss()
+
+            return test_acc, test_loss
+
+        else:
+            return 0, float('inf')
+
+    def ret_acc_loss(self):
+        prediction, one_hot_label = self.ret_prediction_onehot(
+            self.test_dataset)
+
+        # テストデータの精度を計算する
+        test_acc = self.calc_acurracy(prediction, one_hot_label).numpy()
+        # テストデータの損失を計算する
+        test_loss = self.calc_loss(prediction, one_hot_label).numpy()
+
+        return test_acc, test_loss
+
+    def repeat_train(self, trainer,
+                     per_batch=1, repeats=1, break_epochs=5):
+        """
+        モデルのトレーニングを実行する関数。
+
+        Args:
+        - weights_name: 保存されるモデルの重みの名前
+        - per_batch, batch_size: トレーニングのバッチに関するパラメータ
+        - repeats: トレーニングの反復回数
+        - opt1, opt2, switch_epoch: オプティマイザの学習率に関するパラメータ
+
+        Returns:
+        - None
+        """
+
+        best_val_loss = float('inf')
+        best_val_acc = 0
+
+        # 指定した反復回数でモデルのトレーニングを実行
+        for repeat in range(repeats):
+            trainer.repeats = repeat
+            trainer.best_val_loss = best_val_loss
+            trainer.best_val_acc = best_val_acc
+
+            # トレーニングの実行
+            test_acc, test_loss = trainer.run_train(
+                per_batch, break_epochs=break_epochs)
+
+            # 最も良いtest_dataの損失を更新
+            if test_loss < best_val_loss:
+                best_val_loss = test_loss
+                best_val_acc = test_acc
+
+                # トレーニング後のモデルの重みを保存
+                trainer.model.save_weights(trainer.weight_name)
+
+    def train_step(self, data_x, data_y):
+        with tf.GradientTape() as tape:
+            # 損失の計算
+            # loss = tf.keras.losses.CategoricalCrossentropy()(data_y[0], self.model(data_x))
+            loss = self.calc_loss(self.model(data_x), data_y)
+
+        # 勾配の計算と重みの更新
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.optimizer.apply_gradients(
+            zip(gradients, self.model.trainable_variables))
+
+        return loss
+
+
+class SimilarTrainer(LizaSimilarDataset):
+    def __init__(self, model, weight_name,
+                 symbol, k, pr_k, base_m,
+                 batch_size,
+                 train_rate=0.6, valid_rate=0.2,
+                 k_freeze=3, init_ratio=1e-4,
+                 y_mode='binary'):
+
+        super().__init__(symbol, k, pr_k, base_m,
+                         batch_size,
                          train_rate, valid_rate,
                          y_mode=y_mode)
 
@@ -625,18 +942,18 @@ class LizaTrainerBinary(Trainer):
         return loss
 
 
-class LizaTrainerContrarian(Trainer):
+class LizaTrainerSimilar(SimilarTrainer):
     def __init__(self, model, weight_name, batch_size,
-                 hist, m_lis, k, pr_k, base_m=None,
+                 symbol, k, pr_k, base_m,
                  k_freeze=3, train_rate=0.6, valid_rate=0.2,
                  init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=30):
 
         super().__init__(model, weight_name,
-                         hist, m_lis, k, pr_k, batch_size,
-                         base_m,
+                         symbol, k, pr_k, base_m,
+                         batch_size,
                          train_rate, valid_rate,
                          k_freeze, init_ratio,
-                         y_mode='contrarian')
+                         y_mode='binary')
 
         self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
@@ -651,40 +968,7 @@ class LizaTrainerContrarian(Trainer):
         return accuracy
 
     def calc_loss(self, prediction, label):
-        loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
-        # loss = tf.keras.losses.BinaryCrossentropy()(label, prediction)
+        # loss = tf.keras.losses.CategoricalCrossentropy()(label, prediction)
+        loss = tf.keras.losses.BinaryCrossentropy()(label, prediction)
 
         return loss
-
-
-class LizaTrainerDiffer(Trainer):
-    def __init__(self, model, weight_name, batch_size,
-                 hist, m_lis, k, pr_k, base_m=None,
-                 k_freeze=3, train_rate=0.6, valid_rate=0.2,
-                 init_ratio=1e-4, opt1=1e-5, opt2=1e-6, switch_epoch=30):
-
-        super().__init__(model, weight_name,
-                         hist, m_lis, k, pr_k, batch_size,
-                         base_m,
-                         train_rate, valid_rate,
-                         k_freeze, init_ratio,
-                         y_mode='differ')
-
-        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
-            learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
-
-    def calc_acurracy(self, prediction, label):
-        predicted_indices = tf.argmax(prediction, axis=1)
-        true_indices = tf.argmax(label, axis=1)
-
-        correct_predictions = tf.equal(predicted_indices, true_indices)
-        accuracy = tf.reduce_mean(tf.cast(correct_predictions, tf.float32))
-
-        return accuracy
-
-    def calc_loss(self, prediction, label, spread=0):
-        loss = prediction*label - spread
-        loss = tf.reduce_sum(loss, axis=1)
-        loss = tf.reduce_mean(loss)
-
-        return -1*loss

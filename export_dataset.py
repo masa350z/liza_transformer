@@ -36,7 +36,7 @@ def calc_cos_sim(x, y):
     cos_sim = dot/norm
     cos_sim = cos_sim.numpy()
 
-    return cos_sim
+    return np.nan_to_num(cos_sim)
 
 
 def ret_future_past_dataset(temp_x_past, temp_x_future, data_array_past, data_array_future, num_similar=10):
@@ -69,10 +69,15 @@ def ret_future_past_dataset(temp_x_past, temp_x_future, data_array_past, data_ar
 
 
 # %%
-symbol = sys.argv[1]
-k = int(sys.argv[2])
-pr_k = int(sys.argv[3])
-base_m = int(sys.argv[4])
+# symbol = sys.argv[1]
+# k = int(sys.argv[2])
+# pr_k = int(sys.argv[3])
+# base_m = int(sys.argv[4])
+# %%
+symbol = 'USDJPY'
+k = 12
+pr_k = 12
+base_m = 15
 
 m_lis = [base_m, base_m*2, base_m*3]
 
@@ -97,7 +102,7 @@ batch_size = int(500*base_m/15)
 num_batches = int(data_length/batch_size)
 
 cos_sim_lis, future_lis, binary_lis, rawinput_lis = [], [], [], []
-
+# %%
 for h in tqdm(range(num_batches)):
     i = batch_size*(h+1)
     if h+1 == num_batches:
@@ -116,16 +121,18 @@ for h in tqdm(range(num_batches)):
     cos_sim_lis.append(cos_sim)
     future_lis.append(similar_future)
     binary_lis.append(future_binary)
-    rawinput_lis.append(temp_x_future)
+    rawinput_lis.append(temp_x_past.numpy())
 # %%
 cos_sim_lis = np.concatenate(cos_sim_lis)
 future_lis = np.concatenate(future_lis)
 binary_lis = np.concatenate(binary_lis)
 rawinput_lis = np.concatenate(rawinput_lis)
 # %%
-dataset = [rawinput_lis, future_lis, cos_sim_lis, binary_lis]
+dataset = [rawinput_lis, np.transpose(
+    future_lis, (0, 2, 1)), cos_sim_lis, binary_lis]
 # %%
-data_path = 'datas/dataset/k{}_pr{}_m{}.pickle'.format(k, pr_k, base_m)
+data_path = 'datas/dataset/{}_k{}_pr{}_m{}.pickle'.format(
+    symbol, k, pr_k, base_m)
 with open(data_path, 'wb') as f:
     pickle.dump(dataset, f)
 

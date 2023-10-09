@@ -169,3 +169,32 @@ class LizaMultiTransformer(LizaTransformer):
         x = self.output_layer(x)
 
         return x
+
+
+class LizaSimilarTransformer(LizaTransformer):
+    def __init__(self, seq_len, out_dim):
+        super(LizaSimilarTransformer, self).__init__(seq_len, out_dim)
+
+        self.conv02 = MultiLengthConv(self.feature_dim, self.kernel_size)
+        self.cos_sim_encoder01 = layers.Dense(50, activation='relu')
+        self.cos_sim_encoder02 = layers.Dense(50, activation='relu')
+
+        self.another_decoder = layers.Dense(50, activation='relu')
+
+    def call(self, x):
+        raw_input, future, cos_sim = x
+
+        raw_input = self.conv01(raw_input)
+        future = future - tf.expand_dims(future[:, 0], 1)
+        future = self.conv02(future[:, 1:])
+        cos_sim = self.cos_sim_encoder01(cos_sim)
+        cos_sim = self.cos_sim_encoder02(cos_sim)
+
+        x = self.fx_transfomer(raw_input + future)
+        x = x[:, -1]
+
+        x = self.dence_layer(x)
+        x = self.another_decoder(x+cos_sim)
+        x = self.output_layer(x)
+
+        return x
