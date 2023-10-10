@@ -278,8 +278,8 @@ def half_updn(inp_x, inp_y):
         index = np.arange(len(dn_y))
         np.random.shuffle(index)
 
-        dn_y = dn_y[index][:-diff]
-        dn_x = dn_x[index][:-diff]
+        dn_y = dn_y[index][:diff]
+        dn_x = dn_x[index][:diff]
 
         y_ = np.concatenate([up_y, dn_y])
         x_ = np.concatenate([up_x, dn_x])

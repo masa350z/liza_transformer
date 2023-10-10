@@ -102,7 +102,7 @@ class ModelTrainer:
 # %%
 y_mode = 'binary'
 symbol = 'USDJPY'
-for symbol in ['USDJPY', 'EURUSD']:
+for symbol in ['EURUSD']:
     hist, timestamp = modules.ret_hist(symbol)
 
     for pr_k in [12]:

@@ -3,6 +3,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium import webdriver
 import time
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
 # %%
 options = webdriver.ChromeOptions()
@@ -16,14 +17,17 @@ PROFILE_PATH: str = (
 # プロファイルの名前
 PROFILE_DIR: str = "Default"
 
-# options.add_argument(f"user-data-dir={PROFILE_PATH}")
-# options.add_argument(f"profile-directory={PROFILE_DIR}")
+options.add_argument(f"user-data-dir={PROFILE_PATH}")
+options.add_argument(f"profile-directory={PROFILE_DIR}")
 
 driver = webdriver.Chrome(
     executable_path='datas/chromedriver.exe', options=options)
 wait = WebDriverWait(driver, 60)
-# %%
+
 driver.get('https://web.thinktrader.com/web-trader/watchlist')
+time.sleep(60)
+# %%
+
 # %%
 
 
@@ -40,12 +44,13 @@ class ThinkTrader:
         # プロファイルの名前
         PROFILE_DIR: str = "Default"
 
-        options.add_argument(f"user-data-dir={PROFILE_PATH}")
-        options.add_argument(f"profile-directory={PROFILE_DIR}")
+        # options.add_argument(f"user-data-dir={PROFILE_PATH}")
+        # options.add_argument(f"profile-directory={PROFILE_DIR}")
 
         self.driver = webdriver.Chrome(
             executable_path='datas/chromedriver.exe', options=options)
         self.wait = WebDriverWait(self.driver, 60)
+        self.actions = ActionChains(self.driver)
 
         self.button_dic = {'USDJPY': {'sell': 0,
                                       'buy': 1},
@@ -68,6 +73,10 @@ class ThinkTrader:
         while retry:
             try:
                 elements = self.driver.find_elements(
+                    By.CLASS_NAME, "Item_iconContainer__10Rq0")
+                self.actions.move_to_element(elements[0]).perform()
+
+                elements = self.driver.find_elements(
                     By.CLASS_NAME, "BidAskSpread_tickerContainer__jjJnL")
                 elements[self.button_dic[symbol][position]].click()
 
@@ -80,7 +89,7 @@ class ThinkTrader:
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_button__CftuL")
         elements[1].click()
-
+        time.sleep(1)
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_button__CftuL")
         elements[1].click()
@@ -89,7 +98,7 @@ class ThinkTrader:
         elements = self.driver.find_elements(
             By.CLASS_NAME, "PositionGrid_triggerContainer__1yWG1")
         elements[1].click()
-
+        time.sleep(1)
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_buttonLabel__3kVe6")
         elements[1].click()
@@ -125,4 +134,20 @@ class ThinkTrader:
 
         elements[0].click()
         time.sleep(sleep_time)
+
+
 # %%
+"""
+thinktrader = ThinkTrader()
+
+# %%
+thinktrader.driver.get('https://web.thinktrader.com/web-trader/watchlist')
+
+# %%
+
+thinktrader.select_symbol_position('USDJPY', 'buy')
+thinktrader.make_order()
+# %%
+thinktrader.settle_position()
+# %%
+"""
