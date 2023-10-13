@@ -102,12 +102,12 @@ class ModelTrainer:
 # %%
 y_mode = 'binary'
 symbol = 'USDJPY'
-for symbol in ['EURUSD']:
+for symbol in ['USDJPY', 'EURUSD']:
     hist, timestamp = modules.ret_hist(symbol)
 
     for pr_k in [12]:
         for k, batch_size in [[12, 120*1000]]:
-            for base_m in [3, 5, 10, 15, 30, 60, 120, 240, 360]:
+            for base_m in [1]:
                 m_lis = [base_m, base_m*2, base_m*3]
 
                 weight_name = modules.ret_weight_name(symbol=symbol,

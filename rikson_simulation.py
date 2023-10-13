@@ -1,9 +1,18 @@
 # %%
-from modules import modules
 from tqdm import tqdm
+import pandas as pd
 import numpy as np
 import sys
 import os
+
+
+def ret_hist(symbol):
+    hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+    df = pd.read_csv(hist_path)
+    hist = np.array(df['price'], dtype='float32')
+    timestamp = np.array(df['timestamp'], dtype='int32')
+
+    return hist, timestamp
 
 
 def ret_kane_asset(hist, rik, son):
@@ -31,30 +40,40 @@ def ret_kane_asset(hist, rik, son):
 
 
 # %%
-
 symbol = sys.argv[1]
 m = int(sys.argv[2])
-rik, son = float(sys.argv[2]), float(sys.argv[3])
+rik = round(float(sys.argv[3]), 3+2)
+son = round(float(sys.argv[4]), 2+2)
+# %%
+# symbol = 'EURUSD'
+# m = 1
+# rik = 0.005/100
+# son = 0.1/100
 
 base_dir = 'datas/simulation/{}'.format(symbol)
 os.makedirs(base_dir, exist_ok=True)
+save_dir = base_dir + '/m{}_rik{}_son{}.npy'.format(m, rik, son)
 
-hist, timestamp = modules.ret_hist(symbol)
-hist = hist[::m]
+if os.path.exists(save_dir.format(m, rik, son)):
+    print('already exists')
+    # asset_std = np.load(save_dir)
+else:
 
+    hist, timestamp = ret_hist(symbol)
+    hist = hist[::m]
 
-asset_lis = []
-for _ in range(10):
-    kane, asset = ret_kane_asset(hist, rik, son)
+    asset_lis = []
+    for _ in range(10):
+        kane, asset = ret_kane_asset(hist, rik, son)
 
-    asset_lis.append(asset)
+        asset_lis.append(asset)
 
-asset = np.stack(asset_lis, axis=1)
-std = np.std(asset, axis=1)
-asset = np.average(asset, axis=1)
+    asset = np.stack(asset_lis, axis=1)
+    std = np.std(asset, axis=1)
+    asset = np.average(asset, axis=1)
 
-asset_std = np.stack([asset + std*2, asset, asset - std*2], axis=1)
+    asset_std = np.stack([asset + std*2, asset, asset - std*2], axis=1)
 
-save_dir = base_dir + '/m{}_rik{}_son{}.npy'
-np.save(save_dir.format(m, rik, son), asset_std)
+    np.save(save_dir, asset_std)
+
 # %%
