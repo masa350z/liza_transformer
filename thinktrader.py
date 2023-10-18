@@ -224,10 +224,38 @@ class FIXA(FX_Model):
         self.count += 1
 
 
+class FIXAR(TraderDriver):
+    def __init__(self):
+        super().__init__()
+
+        self.fixa_usdjpy = FIXA('USDJPY', 0.005, 0.1)
+        self.fixa_eurusd = FIXA('EURUSD', 0.005/100, 0.1/100)
+
+    def run(self):
+        usdjpy, eurusd = self.get_price()
+
+        pr_position_usdjpy = self.fixa_usdjpy.position
+        self.fixa_usdjpy.mono_run(usdjpy)
+        position_usdjpy = self.fixa_usdjpy.position
+
+        if pr_position_usdjpy != position_usdjpy:
+            if pr_position_usdjpy != 0:
+                self.settle_position()
+                time.sleep(1)
+
+            if position_usdjpy == 1:
+                self.select_symbol_position('USDJPY', 'buy')
+            elif position_usdjpy == -1:
+                self.select_symbol_position('USDJPY', 'sell')
+            self.make_order()
+            time.sleep(1)
+
+        if self.fixa_usdjpy.count % 10 == 0:
+            self.driver.refresh()
+
+
 # %%
-price_list = []
-traderdriver = TraderDriver()
-fixa_usdjpy = FIXA('USDJPY', 0.005, 0.1)
+fixar = FIXAR()
 time.sleep(100)
 # %%
 error_count = 0
@@ -235,33 +263,13 @@ error_count = 0
 while error_count < 3:
     t = time.time()
     try:
-        usdjpy, eurusd = traderdriver.get_price()
-
-        pr_position_usdjpy = fixa_usdjpy.position
-        fixa_usdjpy.mono_run(usdjpy)
-        position_usdjpy = fixa_usdjpy.position
-
-        if pr_position_usdjpy != position_usdjpy:
-            if pr_position_usdjpy != 0:
-                traderdriver.settle_position()
-                time.sleep(1)
-
-            if position_usdjpy == 1:
-                traderdriver.select_symbol_position('USDJPY', 'buy')
-            elif position_usdjpy == -1:
-                traderdriver.select_symbol_position('USDJPY', 'sell')
-            traderdriver.make_order()
-            time.sleep(1)
-
-        if fixa_usdjpy.count % 10 == 0:
-            traderdriver.driver.refresh()
-
+        fixar.run()
         error_count = 0
 
     except Exception as e:
         print(e)
         error_count += 1
-        traderdriver.driver.refresh()
+        fixar.driver.refresh()
 
     sleep_time = 60 - (time.time() - t)
     time.sleep(sleep_time)
