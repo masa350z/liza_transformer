@@ -91,32 +91,20 @@ hist_data = data_x[:, -1, 0]
 rik = 0.005/100
 son = 0.1/100
 
-
 kane, asset = simulate(pred, hist_data, rik, son)
-
-# %%
 kane
 # %%
 pd.DataFrame(asset).plot()
 # %%
 pd.DataFrame(hist_data).plot()
 # %%
-tr_len = int(len(asset)*0.6)
-vl_len = int(len(asset)*0.2)
+hist9 = hist_data[-9:]
+
 # %%
-tr_asset = asset[:tr_len]
-vl_asset = asset[tr_len:tr_len+vl_len]
-te_asset = asset[tr_len+vl_len:]
+
+
+inp_data = ret_inpdata(hist9)
 # %%
-tr_asset[-1] - tr_asset[0]
+pr = model.predict(inp_data)[0]
 # %%
-vl_asset[-1] - vl_asset[0]
-# %%
-te_asset[-1] - te_asset[0]
-# %%
-pd.DataFrame(tr_asset).plot()
-# %%
-pd.DataFrame(vl_asset).plot()
-# %%
-pd.DataFrame(te_asset).plot()
-# %%
+pr[0] > 0.5

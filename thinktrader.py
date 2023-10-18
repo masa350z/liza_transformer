@@ -4,14 +4,57 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium import webdriver
+import numpy as np
+from modules import models, modules
 import random
 import time
+
+
+def ret_inpdata(hist):
+    data_x01 = hist[-3:]
+    data_x02 = hist[::-1][::2][::-1][-3:]
+    data_x03 = hist[::-1][::3][::-1][-3:]
+
+    inp_data = np.stack([data_x01, data_x02, data_x03]).T
+    inp_data = np.expand_dims(inp_data, 0)
+
+    return inp_data
+
+
+def ret_model(symbol, base_m, k, pr_k):
+    m_lis = [base_m, base_m*2, base_m*3]
+    weight_name = modules.ret_weight_name(symbol=symbol,
+                                          k=k,
+                                          pr_k=pr_k,
+                                          m_lis=m_lis,
+                                          y_mode='binary')
+
+    model = models.LizaTransformer(k, out_dim=2)
+    model.load_weights(weight_name + '/best_weights')
+
+    return model
 
 # %%
 
 
-class ThinkTrader:
+class FX_Model:
     def __init__(self):
+        self.model_usdjpy = ret_model('USDJPY', 1, 3, 3)
+        self.model_eurusd = ret_model('EURUSD', 1, 3, 3)
+
+    def make_prediction(self, symbol, inp_data):
+        if symbol == 'USDJPY':
+            prediction = self.model_usdjpy.predict(inp_data)[0]
+        elif symbol == 'EURUSD':
+            prediction = self.model_eurusd.predict(inp_data)[0]
+
+        return prediction[0] > 0.5
+
+
+class ThinkTrader(FX_Model):
+    def __init__(self):
+        super().__init__()
+
         options = webdriver.ChromeOptions()
         # options.add_argument("--headless")
         options.add_argument("--no-sandbox")
@@ -139,34 +182,51 @@ count = 0
 position = 0
 get_price = 0
 rik, son = 0.005, 0.1
-while True:
+error_count = 0
+
+usdjpy_price_list = []
+eurusd_price_list = []
+
+while error_count < 3:
     t = time.time()
-    usdjpy, eurusd = thinktrader.get_price()
+    try:
+        usdjpy, eurusd = thinktrader.get_price()
+        usdjpy_price_list.append(usdjpy)
+        eurusd_price_list.append(eurusd)
 
-    if position == 0:
-        if random.random() > 0.5:
-            position = 1
-            thinktrader.select_symbol_position('USDJPY', 'buy')
+        usdjpy_price_list = usdjpy_price_list[-10:]
+        eurusd_price_list = eurusd_price_list[-10:]
+
+        if position == 0:
+            if random.random() > 0.5:
+                position = 1
+                thinktrader.select_symbol_position('USDJPY', 'buy')
+            else:
+                position = -1
+                thinktrader.select_symbol_position('USDJPY', 'sell')
+            thinktrader.make_order()
+            get_price = usdjpy
+
         else:
-            position = -1
-            thinktrader.select_symbol_position('USDJPY', 'sell')
-        thinktrader.make_order()
-        get_price = usdjpy
+            diff = usdjpy - get_price
+            if diff*position > rik:
+                thinktrader.settle_position()
+                position = 0
+            elif diff*position < -son:
+                thinktrader.settle_position()
+                position = 0
 
-    else:
-        diff = usdjpy - get_price
-        if diff*position > rik:
-            thinktrader.settle_position()
-            position = 0
-        elif diff*position < -son:
-            thinktrader.settle_position()
-            position = 0
+        if count % 10 == 0:
+            thinktrader.driver.refresh()
+        count += 1
 
-    if count % 10 == 0:
+        error_count = 0
+
+    except Exception as e:
+        print(e)
+        error_count += 1
         thinktrader.driver.refresh()
-    count += 1
 
     sleep_time = 60 - (time.time() - t)
-
     time.sleep(sleep_time)
 # %%
