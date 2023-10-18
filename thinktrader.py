@@ -23,23 +23,17 @@ def ret_inpdata(hist):
     return inp_data
 
 
-def ret_model(symbol, base_m, k, pr_k):
-    m_lis = [base_m, base_m*2, base_m*3]
-    weight_name = modules.ret_weight_name(symbol=symbol,
-                                          k=k,
-                                          pr_k=pr_k,
-                                          m_lis=m_lis,
-                                          y_mode='binary')
-
-    model = models.LizaTransformer(k, out_dim=2)
-    model.load_weights(weight_name + '/best_weights')
-
-    return model
-
-
 class FX_Model:
-    def __init__(self, symbol):
-        self.model = ret_model(symbol, 1, 3, 3)
+    def __init__(self, symbol, base_m, k, pr_k):
+        m_lis = [base_m, base_m*2, base_m*3]
+        weight_name = modules.ret_weight_name(symbol=symbol,
+                                              k=k,
+                                              pr_k=pr_k,
+                                              m_lis=m_lis,
+                                              y_mode='binary')
+
+        self.model = models.LizaTransformer(k, out_dim=2)
+        self.model.load_weights(weight_name + '/best_weights')
 
     def make_prediction(self, inp_data):
         prediction = self.model.predict(inp_data)[0]
@@ -52,6 +46,7 @@ class TraderDriver:
         options = webdriver.ChromeOptions()
         # options.add_argument("--headless")
         options.add_argument("--no-sandbox")
+        options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
         # ユーザープロファイルの保管場所
         PROFILE_PATH: str = (
@@ -166,7 +161,7 @@ class TraderDriver:
 
 class FIXA(FX_Model):
     def __init__(self, symbol, rik, son):
-        super().__init__(symbol)
+        super().__init__(symbol, 1, 3, 3)
         self.count = 0
         self.position = 0
         self.get_price = 0
@@ -243,12 +238,13 @@ class FIXAR(TraderDriver):
                 self.settle_position()
                 time.sleep(1)
 
-            if position_usdjpy == 1:
-                self.select_symbol_position('USDJPY', 'buy')
-            elif position_usdjpy == -1:
-                self.select_symbol_position('USDJPY', 'sell')
-            self.make_order()
-            time.sleep(1)
+            if self.zero_spread():
+                if position_usdjpy == 1:
+                    self.select_symbol_position('USDJPY', 'buy')
+                elif position_usdjpy == -1:
+                    self.select_symbol_position('USDJPY', 'sell')
+                self.make_order()
+                time.sleep(1)
 
         if self.fixa_usdjpy.count % 10 == 0:
             self.driver.refresh()
@@ -256,8 +252,8 @@ class FIXAR(TraderDriver):
 
 # %%
 fixar = FIXAR()
-time.sleep(100)
-# %%
+time.sleep(60)
+
 error_count = 0
 
 while error_count < 3:
