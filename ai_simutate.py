@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-def simulate(pred, hist_data, rik, son):
+def simulate(pred, hist_data, rik, son, spread=0):
     kane = 0
     asset = []
     position = 0
@@ -20,11 +20,11 @@ def simulate(pred, hist_data, rik, son):
                 position = 0
 
         if position == 0:
-            position = i
             if pred[h] > 0.5:
-                # if np.random.random() > 0.5:
+                position = i + spread
                 pos = 1
             else:
+                position = i - spread
                 pos = -1
 
         asset.append(kane)
@@ -32,7 +32,7 @@ def simulate(pred, hist_data, rik, son):
     return kane, asset
 
 
-def simulate_random(hist_data, rik, son):
+def simulate_random(hist_data, rik, son, spread=0):
     kane = 0
     asset = []
     position = 0
@@ -48,10 +48,11 @@ def simulate_random(hist_data, rik, son):
                 position = 0
 
         if position == 0:
-            position = i
             if np.random.random() > 0.5:
+                position = i + spread
                 pos = 1
             else:
+                position = i - spread
                 pos = -1
 
         asset.append(kane)
@@ -62,7 +63,7 @@ def simulate_random(hist_data, rik, son):
 # %%
 y_mode = 'binary'
 
-symbol = 'EURUSD'
+symbol = 'USDJPY'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
@@ -88,10 +89,11 @@ pred = pred[:, 0]
 # %%
 hist_data = data_x[:, -1, 0]
 # %%
-rik = 0.005/100
-son = 0.1/100
+rik = 0.05/1
+son = 0.5/1
 
 kane, asset = simulate(pred, hist_data, rik, son)
+# kane, asset = simulate_random(hist_data, rik, son)
 kane
 # %%
 pd.DataFrame(asset).plot()
