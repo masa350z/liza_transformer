@@ -10,8 +10,8 @@ symbol = 'EURUSD'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
-k = 12
-pr_k = 12
+k = 3
+pr_k = 3
 
 base_m = 1
 m_lis = [base_m, base_m*2, base_m*3]
@@ -27,7 +27,7 @@ model.load_weights(weight_name + '/best_weights')
 # %%
 data_x, data_y = modules.ret_data_xy(
     hist, m_lis, base_m, k, pr_k, y_mode=y_mode)
-pred = model.predict(data_x)
+pred = model.predict(data_x, batch_size=12000)
 pred = pred[:, 0]
 # %%
 data_x = data_x[:, -1, 0]
@@ -44,8 +44,8 @@ pos = 0
 for h, i in tqdm(enumerate(data_x)):
     if position == 0:
         position = i
-        # if pred[h] > 0.5:
-        if np.random.random() > 0.5:
+        if pred[h] > 0.5:
+            # if np.random.random() > 0.5:
             pos = 1
         else:
             pos = -1
@@ -60,6 +60,15 @@ for h, i in tqdm(enumerate(data_x)):
             position = 0
             count_list.append(count)
         count += 1
+
+        if position == 0:
+            position = i
+            if pred[h] > 0.5:
+                # if np.random.random() > 0.5:
+                pos = 1
+            else:
+                pos = -1
+            count = 0
     asset.append(kane)
 
 # %%

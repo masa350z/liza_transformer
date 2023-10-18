@@ -45,10 +45,10 @@ m = int(sys.argv[2])
 rik = round(float(sys.argv[3]), 3+2)
 son = round(float(sys.argv[4]), 2+2)
 # %%
-# symbol = 'EURUSD'
-# m = 1
-# rik = 0.005/100
-# son = 0.1/100
+symbol = 'USDJPY'
+m = 1
+rik = 0.005
+son = 0.1
 
 base_dir = 'datas/simulation/{}'.format(symbol)
 os.makedirs(base_dir, exist_ok=True)
@@ -77,3 +77,19 @@ else:
     np.save(save_dir, asset_std)
 
 # %%
+hist, timestamp = ret_hist(symbol)
+hist = hist[::m]
+
+asset_lis = []
+for _ in range(10):
+    kane, asset = ret_kane_asset(hist, rik, son)
+
+    asset_lis.append(asset)
+
+asset = np.stack(asset_lis, axis=1)
+std = np.std(asset, axis=1)
+asset = np.average(asset, axis=1)
+
+asset_std = np.stack([asset + std*2, asset, asset - std*2], axis=1)
+# %%
+pd.DataFrame(asset_std).plot()

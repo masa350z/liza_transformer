@@ -4,7 +4,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium import webdriver
-import pandas as pd
+import random
 import time
 
 # %%
@@ -122,24 +122,45 @@ class ThinkTrader:
         elements[0].click()
         time.sleep(sleep_time)
 
+    def zero_spread(self):
+        elements = self.driver.find_elements(
+            By.CLASS_NAME, "BidAskSpread_spread__21ZFB")
+
+        return sum([float(i.text) for i in elements]) == 0
+
 
 # %%
 price_list = []
 thinktrader = ThinkTrader()
 thinktrader.driver.get('https://web.thinktrader.com/web-trader/watchlist')
-time.sleep(10)
+time.sleep(100)
 # %%
 count = 0
+position = 0
+get_price = 0
+rik, son = 0.005, 0.1
 while True:
     t = time.time()
-    # thinktrader.idle()
     usdjpy, eurusd = thinktrader.get_price()
 
-    price_list.append([t, usdjpy, eurusd])
-    price_df = pd.DataFrame(price_list, columns=[
-                            'timestamp', 'USDJPY', 'EURUSD'])
+    if position == 0:
+        if random.random() > 0.5:
+            position = 1
+            thinktrader.select_symbol_position('USDJPY', 'buy')
+        else:
+            position = -1
+            thinktrader.select_symbol_position('USDJPY', 'sell')
+        thinktrader.make_order()
+        get_price = usdjpy
 
-    price_df.to_csv('datas/price.csv', index=False)
+    else:
+        diff = usdjpy - get_price
+        if diff*position > rik:
+            thinktrader.settle_position()
+            position = 0
+        elif diff*position < -son:
+            thinktrader.settle_position()
+            position = 0
 
     if count % 10 == 0:
         thinktrader.driver.refresh()
@@ -149,9 +170,3 @@ while True:
 
     time.sleep(sleep_time)
 # %%
-thinktrader.get_price()
-# %%
-elements = thinktrader.driver.find_elements(
-    By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
-t = elements[0].find_elements(By.TAG_NAME, "span")
-t[5].text
