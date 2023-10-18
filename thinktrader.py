@@ -4,8 +4,10 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium import webdriver
-import numpy as np
+
 from modules import models, modules
+
+import numpy as np
 import random
 import time
 
@@ -34,27 +36,19 @@ def ret_model(symbol, base_m, k, pr_k):
 
     return model
 
-# %%
-
 
 class FX_Model:
-    def __init__(self):
-        self.model_usdjpy = ret_model('USDJPY', 1, 3, 3)
-        self.model_eurusd = ret_model('EURUSD', 1, 3, 3)
+    def __init__(self, symbol):
+        self.model = ret_model(symbol, 1, 3, 3)
 
-    def make_prediction(self, symbol, inp_data):
-        if symbol == 'USDJPY':
-            prediction = self.model_usdjpy.predict(inp_data)[0]
-        elif symbol == 'EURUSD':
-            prediction = self.model_eurusd.predict(inp_data)[0]
+    def make_prediction(self, inp_data):
+        prediction = self.model.predict(inp_data)[0]
 
         return prediction[0] > 0.5
 
 
-class ThinkTrader(FX_Model):
+class TraderDriver:
     def __init__(self):
-        super().__init__()
-
         options = webdriver.ChromeOptions()
         # options.add_argument("--headless")
         options.add_argument("--no-sandbox")
@@ -78,6 +72,8 @@ class ThinkTrader(FX_Model):
                                       'buy': 1},
                            'EURUSD': {'sell': 2,
                                       'buy': 3}}
+
+        self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
 
     def login(self):
         self.driver.find_element(
@@ -158,74 +154,114 @@ class ThinkTrader(FX_Model):
 
         return usdjpy, eurusd
 
-    def idle(self, sleep_time=0):
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "Item_iconContainer__10Rq0")
-
-        elements[0].click()
-        time.sleep(sleep_time)
-
     def zero_spread(self):
         elements = self.driver.find_elements(
             By.CLASS_NAME, "BidAskSpread_spread__21ZFB")
 
         return sum([float(i.text) for i in elements]) == 0
 
+    def close(self):
+        self.driver.close()
+
+
+class FIXA(FX_Model):
+    def __init__(self, symbol, rik, son):
+        super().__init__(symbol)
+        self.count = 0
+        self.position = 0
+        self.get_price = 0
+
+        self.price_list = []
+        self.rik, self.son = rik, son
+
+    def mono_run(self, price):
+        self.price_list.append(price)
+        self.price_list = self.price_list[-10:]
+
+        if self.position != 0:
+            diff = price - self.get_price
+
+            if diff*self.position > self.rik:
+                self.position = 0
+            elif diff*self.position < -self.son:
+                self.position = 0
+
+        if self.position == 0:
+            if len(self.price_list) >= 9:
+                inp_data = ret_inpdata(self.price_list)
+                if self.make_prediction(inp_data):
+                    self.position = 1
+                else:
+                    self.position = -1
+            else:
+                if random.random() > 0.5:
+                    self.position = 1
+                else:
+                    self.position = -1
+
+            self.get_price = price
+        self.count += 1
+
+    def random_run(self, price):
+        self.price_list.append(price)
+        self.price_list = self.price_list[-10:]
+
+        if self.position != 0:
+            diff = price - self.get_price
+
+            if diff*self.position > self.rik:
+                self.position = 0
+            elif diff*self.position < -self.son:
+                self.position = 0
+
+        if self.position == 0:
+            if random.random() > 0.5:
+                self.position = 1
+            else:
+                self.position = -1
+            self.get_price = price
+
+        self.count += 1
+
 
 # %%
 price_list = []
-thinktrader = ThinkTrader()
-thinktrader.driver.get('https://web.thinktrader.com/web-trader/watchlist')
+traderdriver = TraderDriver()
+fixa_usdjpy = FIXA('USDJPY', 0.005, 0.1)
 time.sleep(100)
 # %%
-count = 0
-position = 0
-get_price = 0
-rik, son = 0.005, 0.1
 error_count = 0
-
-usdjpy_price_list = []
-eurusd_price_list = []
 
 while error_count < 3:
     t = time.time()
     try:
-        usdjpy, eurusd = thinktrader.get_price()
-        usdjpy_price_list.append(usdjpy)
-        eurusd_price_list.append(eurusd)
+        usdjpy, eurusd = traderdriver.get_price()
 
-        usdjpy_price_list = usdjpy_price_list[-10:]
-        eurusd_price_list = eurusd_price_list[-10:]
+        pr_position_usdjpy = fixa_usdjpy.position
+        fixa_usdjpy.mono_run(usdjpy)
+        position_usdjpy = fixa_usdjpy.position
 
-        if position == 0:
-            if random.random() > 0.5:
-                position = 1
-                thinktrader.select_symbol_position('USDJPY', 'buy')
-            else:
-                position = -1
-                thinktrader.select_symbol_position('USDJPY', 'sell')
-            thinktrader.make_order()
-            get_price = usdjpy
+        if pr_position_usdjpy != position_usdjpy:
+            if pr_position_usdjpy != 0:
+                traderdriver.settle_position()
+                time.sleep(1)
 
-        else:
-            diff = usdjpy - get_price
-            if diff*position > rik:
-                thinktrader.settle_position()
-                position = 0
-            elif diff*position < -son:
-                thinktrader.settle_position()
-                position = 0
+            if position_usdjpy == 1:
+                traderdriver.select_symbol_position('USDJPY', 'buy')
+            elif position_usdjpy == -1:
+                traderdriver.select_symbol_position('USDJPY', 'sell')
+            traderdriver.make_order()
+            time.sleep(1)
 
-        if count % 10 == 0:
-            thinktrader.driver.refresh()
-        count += 1
+        if fixa_usdjpy.count % 10 == 0:
+            traderdriver.driver.refresh()
 
         error_count = 0
 
     except Exception as e:
         print(e)
         error_count += 1
-        thinktrader.driver.refresh()
+        traderdriver.driver.refresh()
 
     sleep_time = 60 - (time.time() - t)
     time.sleep(sleep_time)
