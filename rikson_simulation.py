@@ -45,10 +45,12 @@ m = int(sys.argv[2])
 rik = round(float(sys.argv[3]), 3+2)
 son = round(float(sys.argv[4]), 2+2)
 # %%
+"""
 symbol = 'USDJPY'
 m = 1
 rik = 0.005
 son = 0.1
+"""
 
 base_dir = 'datas/simulation/{}'.format(symbol)
 os.makedirs(base_dir, exist_ok=True)
