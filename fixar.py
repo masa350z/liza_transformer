@@ -2,6 +2,7 @@
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.chrome import service as fs
 from selenium.webdriver.common.by import By
 from selenium import webdriver
 
@@ -58,8 +59,8 @@ class TraderDriver:
         options.add_argument(f"user-data-dir={PROFILE_PATH}")
         options.add_argument(f"profile-directory={PROFILE_DIR}")
 
-        self.driver = webdriver.Chrome(
-            executable_path='datas/chromedriver.exe', options=options)
+        chrome_service = fs.Service(executable_path='datas/chromedriver.exe')
+        self.driver = webdriver.Chrome(service=chrome_service, options=options)
         self.wait = WebDriverWait(self.driver, 60)
         self.actions = ActionChains(self.driver)
 
@@ -169,7 +170,7 @@ class FIXA(FX_Model):
         self.price_list = []
         self.rik, self.son = rik, son
 
-    def mono_run(self, price):
+    def mono_run(self, price, random_=False):
         self.price_list.append(price)
         self.price_list = self.price_list[-10:]
 
@@ -183,8 +184,13 @@ class FIXA(FX_Model):
 
         if self.position == 0:
             if len(self.price_list) >= 9:
-                inp_data = ret_inpdata(self.price_list)
-                if self.make_prediction(inp_data):
+                if random_:
+                    up_ = random.random() > 0.5
+                else:
+                    inp_data = ret_inpdata(self.price_list)
+                    up_ = self.make_prediction(inp_data)
+
+                if up_:
                     self.position = 1
                 else:
                     self.position = -1
@@ -194,26 +200,6 @@ class FIXA(FX_Model):
                 else:
                     self.position = -1
 
-            self.get_price = price
-        self.count += 1
-
-    def random_run(self, price):
-        self.price_list.append(price)
-        self.price_list = self.price_list[-10:]
-
-        if self.position != 0:
-            diff = price - self.get_price
-
-            if diff*self.position > self.rik:
-                self.position = 0
-            elif diff*self.position < -self.son:
-                self.position = 0
-
-        if self.position == 0:
-            if random.random() > 0.5:
-                self.position = 1
-            else:
-                self.position = -1
             self.get_price = price
 
         self.count += 1
@@ -251,22 +237,30 @@ class FIXAR(TraderDriver):
 
 
 # %%
-fixar = FIXAR()
-time.sleep(60)
+if __name__ == '__main__':
+    fixar = FIXAR()
+    time.sleep(60)
 
-error_count = 0
+    error_count = 0
 
-while error_count < 3:
-    t = time.time()
-    try:
-        fixar.run()
-        error_count = 0
+    while error_count < 3:
+        t = time.time()
+        try:
+            fixar.run()
 
-    except Exception as e:
-        print(e)
-        error_count += 1
-        fixar.driver.refresh()
+            print('USD/JPY-{} position: {}'.format(fixar.fixa_usdjpy.price_list[-1],
+                                                   fixar.fixa_usdjpy.position))
+            print('EUR/USD-{} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
+                                                   fixar.fixa_eurusd.position))
+            print('==============================\n')
 
-    sleep_time = 60 - (time.time() - t)
-    time.sleep(sleep_time)
+            error_count = 0
+        except Exception as e:
+            print(e)
+            error_count += 1
+            fixar.driver.refresh()
+
+        sleep_time = 60 - (time.time() - t)
+        time.sleep(sleep_time)
+
 # %%
