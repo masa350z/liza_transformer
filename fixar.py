@@ -8,6 +8,7 @@ from selenium import webdriver
 
 from modules import models, modules
 
+from datetime import datetime
 import numpy as np
 import random
 import time
@@ -99,16 +100,22 @@ class TraderDriver:
             except StaleElementReferenceException:
                 continue
 
-    def make_order(self):
+    def make_order(self, amount):
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_button__CftuL")
         elements[1].click()
         time.sleep(1)
+
+        amount_box = self.driver.find_element(
+            By.CLASS_NAME, 'FormattedNumberInput_input__3uB6c')
+        amount_box.clear()
+        amount_box.send_keys(str(amount))
+
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_button__CftuL")
         elements[1].click()
 
-    def settle_position(self):
+    def settle_all_position(self):
         elements = self.driver.find_elements(
             By.CLASS_NAME, "PositionGrid_triggerContainer__1yWG1")
         elements[1].click()
@@ -116,6 +123,34 @@ class TraderDriver:
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_buttonLabel__3kVe6")
         elements[1].click()
+
+    def settle_position(self, symbol):
+        dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
+        dx_row = [i.text for i in dx_row]
+
+        bool_eurusd, bool_usdjpy = False, False
+
+        for i in dx_row:
+            if 'EURUSD' in i:
+                bool_eurusd = True
+            if 'USDJPY' in i:
+                bool_usdjpy = True
+
+        if bool_usdjpy and bool_eurusd:
+            button_dic = {'EURUSD': 11,
+                          'USDJPY': 13}
+
+            posi = self.driver.find_elements(
+                By.CLASS_NAME, "PositionGrid_closeAndMoreOptionsCell__1EeeS")
+            posi[button_dic[symbol]].click()
+            time.sleep(1)
+
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "Button_buttonLabel__3kVe6")
+            elements[1].click()
+
+        else:
+            self.settle_all_position()
 
     def get_price(self):
         retry = 0
@@ -206,9 +241,9 @@ class FIXA(FX_Model):
 
 
 class FIXAR(TraderDriver):
-    def __init__(self):
+    def __init__(self, amount):
         super().__init__()
-
+        self.amount = amount
         self.fixa_usdjpy = FIXA('USDJPY', 0.005, 0.1)
         self.fixa_eurusd = FIXA('EURUSD', 0.005/100, 0.1/100)
 
@@ -216,21 +251,45 @@ class FIXAR(TraderDriver):
         usdjpy, eurusd = self.get_price()
 
         pr_position_usdjpy = self.fixa_usdjpy.position
+        pr_position_eurusd = self.fixa_eurusd.position
+
         self.fixa_usdjpy.mono_run(usdjpy)
+        self.fixa_eurusd.mono_run(eurusd)
+
         position_usdjpy = self.fixa_usdjpy.position
+        position_eurusd = self.fixa_eurusd.position
 
         if pr_position_usdjpy != position_usdjpy:
             if pr_position_usdjpy != 0:
-                self.settle_position()
-                time.sleep(1)
+                self.settle_position('USDJPY')
+                time.sleep(5)
 
             if self.zero_spread():
                 if position_usdjpy == 1:
                     self.select_symbol_position('USDJPY', 'buy')
                 elif position_usdjpy == -1:
                     self.select_symbol_position('USDJPY', 'sell')
-                self.make_order()
-                time.sleep(1)
+                self.make_order(self.amount)
+                time.sleep(5)
+            else:
+                self.fixa_usdjpy.position = 0
+                self.fixa_eurusd.position = 0
+
+        if pr_position_eurusd != position_eurusd:
+            if pr_position_eurusd != 0:
+                self.settle_position('EURUSD')
+                time.sleep(5)
+
+            if self.zero_spread():
+                if position_eurusd == 1:
+                    self.select_symbol_position('EURUSD', 'buy')
+                elif position_eurusd == -1:
+                    self.select_symbol_position('EURUSD', 'sell')
+                self.make_order(self.amount)
+                time.sleep(5)
+            else:
+                self.fixa_usdjpy.position = 0
+                self.fixa_eurusd.position = 0
 
         if self.fixa_usdjpy.count % 10 == 0:
             self.driver.refresh()
@@ -238,20 +297,22 @@ class FIXAR(TraderDriver):
 
 # %%
 if __name__ == '__main__':
-    fixar = FIXAR()
-    time.sleep(60)
-
+    fixar = FIXAR(amount=1000)
     error_count = 0
+    time.sleep(60)
 
     while error_count < 3:
         t = time.time()
         try:
             fixar.run()
 
+            print(datetime.now())
             print('USD/JPY-{} position: {}'.format(fixar.fixa_usdjpy.price_list[-1],
                                                    fixar.fixa_usdjpy.position))
+
             print('EUR/USD-{} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
                                                    fixar.fixa_eurusd.position))
+
             print('==============================\n')
 
             error_count = 0
