@@ -274,6 +274,10 @@ class FIXAR(TraderDriver):
             else:
                 self.fixa_usdjpy.position = 0
                 self.fixa_eurusd.position = 0
+                try:
+                    self.settle_all_position()
+                except Exception as e:
+                    print(e)
 
         if pr_position_eurusd != position_eurusd:
             if pr_position_eurusd != 0:
@@ -290,6 +294,10 @@ class FIXAR(TraderDriver):
             else:
                 self.fixa_usdjpy.position = 0
                 self.fixa_eurusd.position = 0
+                try:
+                    self.settle_all_position()
+                except Exception as e:
+                    print(e)
 
         if self.fixa_usdjpy.count % 10 == 0:
             self.driver.refresh()
