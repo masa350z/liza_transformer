@@ -290,12 +290,10 @@ if __name__ == '__main__':
             fixar.run()
 
             print(datetime.now())
-            print('USD/JPY {} position: {}'.format(fixar.fixa_usdjpy.price_list[-1],
-                                                   fixar.fixa_usdjpy.position))
-
-            print('EUR/USD {} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
-                                                   fixar.fixa_eurusd.position))
-
+            for symbol in ['EURUSD', 'USDJPY']:
+                print('{} {} position: {}'.format(symbol,
+                                                  fixar.fixa[symbol].price_list[-1],
+                                                  fixar.fixa[symbol].position))
             print('==============================\n')
 
             error_count = 0
