@@ -43,6 +43,51 @@ class FX_Model:
         return prediction[0] > 0.5
 
 
+class FIXA(FX_Model):
+    def __init__(self, symbol, rik, son):
+        super().__init__(symbol, 1, 3, 3)
+        self.count = 0
+        self.position = 0
+        self.get_price = 0
+
+        self.price_list = []
+        self.rik, self.son = rik, son
+
+    def refresh_position(self, price, random_=False):
+        self.price_list.append(price)
+        self.price_list = self.price_list[-10:]
+
+        if self.position != 0:
+            diff = price - self.get_price
+
+            if diff*self.position > self.rik:
+                self.position = 0
+            elif diff*self.position < -self.son:
+                self.position = 0
+
+        if self.position == 0:
+            if len(self.price_list) >= 9:
+                if random_:
+                    up_ = random.random() > 0.5
+                else:
+                    inp_data = ret_inpdata(self.price_list)
+                    up_ = self.make_prediction(inp_data)
+
+                if up_:
+                    self.position = 1
+                else:
+                    self.position = -1
+            else:
+                if random.random() > 0.5:
+                    self.position = 1
+                else:
+                    self.position = -1
+
+            self.get_price = price
+
+        self.count += 1
+
+
 class TraderDriver:
     def __init__(self):
         options = webdriver.ChromeOptions()
@@ -197,51 +242,6 @@ class TraderDriver:
         self.driver.close()
 
 
-class FIXA(FX_Model):
-    def __init__(self, symbol, rik, son):
-        super().__init__(symbol, 1, 3, 3)
-        self.count = 0
-        self.position = 0
-        self.get_price = 0
-
-        self.price_list = []
-        self.rik, self.son = rik, son
-
-    def refresh_position(self, price, random_=False):
-        self.price_list.append(price)
-        self.price_list = self.price_list[-10:]
-
-        if self.position != 0:
-            diff = price - self.get_price
-
-            if diff*self.position > self.rik:
-                self.position = 0
-            elif diff*self.position < -self.son:
-                self.position = 0
-
-        if self.position == 0:
-            if len(self.price_list) >= 9:
-                if random_:
-                    up_ = random.random() > 0.5
-                else:
-                    inp_data = ret_inpdata(self.price_list)
-                    up_ = self.make_prediction(inp_data)
-
-                if up_:
-                    self.position = 1
-                else:
-                    self.position = -1
-            else:
-                if random.random() > 0.5:
-                    self.position = 1
-                else:
-                    self.position = -1
-
-            self.get_price = price
-
-        self.count += 1
-
-
 class FIXAR(TraderDriver):
     def __init__(self, amount):
         super().__init__()
@@ -260,11 +260,11 @@ class FIXAR(TraderDriver):
             new_position = self.fixa[symbol].position
 
             if pr_position != new_position:
-                if pr_position != 0:
-                    self.settle_position(symbol)
-                    time.sleep(5)
-
                 if self.zero_spread():
+                    if pr_position != 0:
+                        self.settle_position(symbol)
+                        time.sleep(5)
+
                     if new_position == 1:
                         self.select_symbol_position(symbol, 'buy')
                     elif new_position == -1:
@@ -274,7 +274,7 @@ class FIXAR(TraderDriver):
                 else:
                     self.fixa[symbol].position = pr_position
 
-        if self.fixa_usdjpy.count % 10 == 0:
+        if self.fixa['USDJPY'].count % 10 == 0:
             self.driver.refresh()
 
 
@@ -308,8 +308,3 @@ if __name__ == '__main__':
         time.sleep(sleep_time)
 
 # %%
-fixar = FIXAR(amount=1000)
-# %%
-fixar.select_symbol_position('EURUSD', 'buy')
-# %%
-fixar.make_order(1000)
