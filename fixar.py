@@ -59,6 +59,8 @@ class TraderDriver:
 
         options.add_argument(f"user-data-dir={PROFILE_PATH}")
         options.add_argument(f"profile-directory={PROFILE_DIR}")
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 
         chrome_service = fs.Service(executable_path='datas/chromedriver.exe')
         self.driver = webdriver.Chrome(service=chrome_service, options=options)
@@ -101,15 +103,15 @@ class TraderDriver:
                 continue
 
     def make_order(self, amount):
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "Button_button__CftuL")
-        elements[1].click()
-        time.sleep(1)
-
         amount_box = self.driver.find_element(
             By.CLASS_NAME, 'FormattedNumberInput_input__3uB6c')
         amount_box.clear()
         amount_box.send_keys(str(amount))
+
+        elements = self.driver.find_elements(
+            By.CLASS_NAME, "Button_button__CftuL")
+        elements[1].click()
+        time.sleep(1)
 
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_button__CftuL")
@@ -205,7 +207,7 @@ class FIXA(FX_Model):
         self.price_list = []
         self.rik, self.son = rik, son
 
-    def mono_run(self, price, random_=False):
+    def refresh_position(self, price, random_=False):
         self.price_list.append(price)
         self.price_list = self.price_list[-10:]
 
@@ -244,60 +246,33 @@ class FIXAR(TraderDriver):
     def __init__(self, amount):
         super().__init__()
         self.amount = amount
-        self.fixa_usdjpy = FIXA('USDJPY', 0.005, 0.1)
-        self.fixa_eurusd = FIXA('EURUSD', 0.005/100, 0.1/100)
+        self.fixa = {'EURUSD': FIXA('EURUSD', 0.005/100, 0.1/100),
+                     'USDJPY': FIXA('USDJPY', 0.005, 0.1)}
 
     def run(self):
         usdjpy, eurusd = self.get_price()
+        price = {'EURUSD': eurusd,
+                 'USDJPY': usdjpy}
 
-        pr_position_usdjpy = self.fixa_usdjpy.position
-        pr_position_eurusd = self.fixa_eurusd.position
+        for symbol in ['EURUSD', 'USDJPY']:
+            pr_position = self.fixa[symbol].position
+            self.fixa[symbol].refresh_position(price[symbol])
+            new_position = self.fixa[symbol].position
 
-        self.fixa_usdjpy.mono_run(usdjpy)
-        self.fixa_eurusd.mono_run(eurusd)
+            if pr_position != new_position:
+                if pr_position != 0:
+                    self.settle_position(symbol)
+                    time.sleep(5)
 
-        position_usdjpy = self.fixa_usdjpy.position
-        position_eurusd = self.fixa_eurusd.position
-
-        if pr_position_usdjpy != position_usdjpy:
-            if pr_position_usdjpy != 0:
-                self.settle_position('USDJPY')
-                time.sleep(5)
-
-            if self.zero_spread():
-                if position_usdjpy == 1:
-                    self.select_symbol_position('USDJPY', 'buy')
-                elif position_usdjpy == -1:
-                    self.select_symbol_position('USDJPY', 'sell')
-                self.make_order(self.amount)
-                time.sleep(5)
-            else:
-                self.fixa_usdjpy.position = 0
-                self.fixa_eurusd.position = 0
-                try:
-                    self.settle_all_position()
-                except Exception as e:
-                    print(e)
-
-        if pr_position_eurusd != position_eurusd:
-            if pr_position_eurusd != 0:
-                self.settle_position('EURUSD')
-                time.sleep(5)
-
-            if self.zero_spread():
-                if position_eurusd == 1:
-                    self.select_symbol_position('EURUSD', 'buy')
-                elif position_eurusd == -1:
-                    self.select_symbol_position('EURUSD', 'sell')
-                self.make_order(self.amount)
-                time.sleep(5)
-            else:
-                self.fixa_usdjpy.position = 0
-                self.fixa_eurusd.position = 0
-                try:
-                    self.settle_all_position()
-                except Exception as e:
-                    print(e)
+                if self.zero_spread():
+                    if new_position == 1:
+                        self.select_symbol_position(symbol, 'buy')
+                    elif new_position == -1:
+                        self.select_symbol_position(symbol, 'sell')
+                    self.make_order(self.amount)
+                    time.sleep(5)
+                else:
+                    self.fixa[symbol].position = pr_position
 
         if self.fixa_usdjpy.count % 10 == 0:
             self.driver.refresh()
@@ -315,10 +290,10 @@ if __name__ == '__main__':
             fixar.run()
 
             print(datetime.now())
-            print('USD/JPY-{} position: {}'.format(fixar.fixa_usdjpy.price_list[-1],
+            print('USD/JPY {} position: {}'.format(fixar.fixa_usdjpy.price_list[-1],
                                                    fixar.fixa_usdjpy.position))
 
-            print('EUR/USD-{} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
+            print('EUR/USD {} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
                                                    fixar.fixa_eurusd.position))
 
             print('==============================\n')
@@ -333,3 +308,8 @@ if __name__ == '__main__':
         time.sleep(sleep_time)
 
 # %%
+fixar = FIXAR(amount=1000)
+# %%
+fixar.select_symbol_position('EURUSD', 'buy')
+# %%
+fixar.make_order(1000)
