@@ -1,6 +1,7 @@
 # %%
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.action_chains import ActionChains
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome import service as fs
 from selenium.webdriver.common.by import By
@@ -93,7 +94,8 @@ class TraderDriver:
         options = webdriver.ChromeOptions()
         # options.add_argument("--headless")
         options.add_argument("--no-sandbox")
-        options.add_experimental_option('excludeSwitches', ['enable-logging'])
+        options.add_experimental_option(
+            'excludeSwitches', ['enable-logging', 'enable-automation'])
 
         # ユーザープロファイルの保管場所
         PROFILE_PATH: str = (
@@ -107,7 +109,8 @@ class TraderDriver:
         options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 
-        chrome_service = fs.Service(executable_path='datas/chromedriver.exe')
+        chrome_service = fs.Service(
+            executable_path=ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=chrome_service, options=options)
         self.wait = WebDriverWait(self.driver, 60)
         self.actions = ActionChains(self.driver)
