@@ -8,6 +8,7 @@ from selenium.webdriver.common.by import By
 from selenium import webdriver
 
 from modules import models, modules
+import line
 
 from datetime import datetime
 import numpy as np
@@ -78,6 +79,7 @@ class FIXA(FX_Model):
                     self.position = 1
                 else:
                     self.position = -1
+
             else:
                 if random.random() > 0.5:
                     self.position = 1
@@ -102,10 +104,10 @@ class TraderDriver:
             "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data"
         )
         # プロファイルの名前
-        PROFILE_DIR: str = "Default"
+        PROFILE_DIR: str = "FIXAR"
 
-        options.add_argument(f"user-data-dir={PROFILE_PATH}")
-        options.add_argument(f"profile-directory={PROFILE_DIR}")
+        # options.add_argument(f"user-data-dir={PROFILE_PATH}")
+        # options.add_argument(f"profile-directory={PROFILE_DIR}")
         options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 
@@ -164,6 +166,18 @@ class TraderDriver:
         elements = self.driver.find_elements(
             By.CLASS_NAME, "Button_button__CftuL")
         elements[1].click()
+
+    def make_order_(self, symbol, position):
+        order_buttons = self.driver.find_elements(
+            By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+        sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
+
+        order_buttons = {'EURUSD': [buy_eurusd, sell_eurusd],
+                         'USDJPY': [buy_usdjpy, sell_usdjpy]}
+
+        buy_sell = 0 if position == 'buy' else 1
+
+        order_buttons[symbol][buy_sell].click()
 
     def settle_all_position(self):
         elements = self.driver.find_elements(
@@ -235,6 +249,27 @@ class TraderDriver:
 
         return usdjpy, eurusd
 
+    def get_price_(self):
+        retry = 0
+        usdjpy, eurusd = 0, 0
+        while retry < 3:
+            try:
+                order_buttons = self.driver.find_elements(
+                    By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+
+                sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
+
+                usdjpy = float(buy_usdjpy.text.split('\n')[1])
+                eurusd = float(buy_eurusd.text.split('\n')[1])
+                break
+            except StaleElementReferenceException:
+                retry += 1
+
+        usdjpy = float(usdjpy)
+        eurusd = float(eurusd)
+
+        return usdjpy, eurusd
+
     def zero_spread(self):
         elements = self.driver.find_elements(
             By.CLASS_NAME, "BidAskSpread_spread__21ZFB")
@@ -257,7 +292,8 @@ class FIXAR(TraderDriver):
         price = {'EURUSD': eurusd,
                  'USDJPY': usdjpy}
 
-        for symbol in ['EURUSD', 'USDJPY']:
+        # for symbol in ['EURUSD', 'USDJPY']:
+        for symbol in ['USDJPY']:
             pr_position = self.fixa[symbol].position
             self.fixa[symbol].refresh_position(price[symbol])
             new_position = self.fixa[symbol].position
@@ -278,7 +314,35 @@ class FIXAR(TraderDriver):
                     self.fixa[symbol].position = pr_position
 
         if self.fixa['USDJPY'].count % 10 == 0:
+            # self.driver_refresh()
             self.driver.refresh()
+
+    def run_(self):
+        # for symbol in ['EURUSD', 'USDJPY']:
+        for symbol in ['USDJPY']:
+            usdjpy, eurusd = self.get_price_()
+            price = {'EURUSD': eurusd,
+                     'USDJPY': usdjpy}
+
+            pr_position = self.fixa[symbol].position
+            self.fixa[symbol].refresh_position(price[symbol])
+            new_position = self.fixa[symbol].position
+
+            if pr_position != new_position:
+                if pr_position != 0:
+                    self.settle_position(symbol)
+
+                if new_position == 1:
+                    self.make_order_(symbol, 'buy')
+                elif new_position == -1:
+                    self.make_order_(symbol, 'sell')
+
+        if self.fixa['USDJPY'].count % 10 == 0:
+            # self.driver_refresh()
+            self.driver.refresh()
+
+    def driver_refresh(self):
+        super().__init__()
 
 
 # %%
@@ -293,7 +357,9 @@ if __name__ == '__main__':
             fixar.run()
 
             print(datetime.now())
-            for symbol in ['EURUSD', 'USDJPY']:
+            print('count: {}'.format(fixar.fixa['USDJPY'].count))
+            # for symbol in ['EURUSD', 'USDJPY']:
+            for symbol in ['USDJPY']:
                 print('{} {} position: {}'.format(symbol,
                                                   fixar.fixa[symbol].price_list[-1],
                                                   fixar.fixa[symbol].position))
@@ -301,11 +367,28 @@ if __name__ == '__main__':
 
             error_count = 0
         except Exception as e:
-            print(e)
+            print('when main {}'.format(e))
             error_count += 1
-            fixar.driver.refresh()
+            try:
+                fixar.driver.refresh()
+            except Exception as e:
+                print('when refreshing {}'.format(e))
+            time.sleep(10)
 
         sleep_time = 60 - (time.time() - t)
         time.sleep(sleep_time)
 
+    line.send_to_masaumi('FIXAR is stopped')
+    fixar.close()
+
+# %%
+fixar = FIXAR(amount=1000)
+# %%
+order_buttons = fixar.driver.find_elements(
+    By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+
+sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
+
+usdjpy_price = float(buy_usdjpy.text.split('\n')[1])
+eurusd_price = float(buy_eurusd.text.split('\n')[1])
 # %%
