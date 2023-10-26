@@ -1,6 +1,6 @@
 # %%
 import pandas as pd
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, ElementClickInterceptedException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -485,8 +485,8 @@ class FIXAR(TraderDriver):
         self.fixa = {'EURUSD': FIXA('EURUSD', 0.005/100, 0.1/100),
                      'USDJPY': FIXA('USDJPY', 0.005, 0.1)}
         """
-        self.fixa = {'EURUSD': FIXA('EURUSD', 0.05/100, 0.005/100),
-                     'USDJPY': FIXA('USDJPY', 0.05, 0.005)}
+        self.fixa = {'EURUSD': FIXA('EURUSD', 0.1/100, 0.03/100),
+                     'USDJPY': FIXA('USDJPY', 0.1, 0.03)}
 
     def run(self):
         usdjpy, eurusd = self.get_price()
@@ -563,6 +563,7 @@ class FIXAR(TraderDriver):
 
 
 # %%
+"""
 if __name__ == '__main__':
     fixar = FIXAR(amount=1000)
     error_count = 0
@@ -591,90 +592,47 @@ if __name__ == '__main__':
             while True:
                 time.sleep(5)
 
-
+"""
 # %%
 fixar = FIXAR(amount=1000)
+fixar.fixa = {'EURUSD': FIXA('EURUSD', 0.1/100, 0.03/100),
+              'USDJPY': FIXA('USDJPY', 0.1, 0.03)}
+time.sleep(60)
 # %%
-position_bool = fixar.position_bool()
+while True:
+    t = time.time()
+    position_bool = fixar.position_bool()
 
-for i in range(2):
-    symbol = 'EURUSD' if i == 0 else 'USDJPY'
-    usdjpy, eurusd = fixar.get_price()
-    price = {'EURUSD': eurusd,
-             'USDJPY': usdjpy}
+    for i in range(2):
+        symbol = 'EURUSD' if i == 0 else 'USDJPY'
+        usdjpy, eurusd = fixar.get_price()
+        price = {'EURUSD': eurusd,
+                 'USDJPY': usdjpy}
 
-    if not position_bool[i][0]:
-        rate = price[symbol]
-        if random.random() > 0.5:
-            side = 'buy'
-            sashine = rate + fixar.fixa[symbol].rik
-            gyaku_sashine = rate - fixar.fixa[symbol].son
+        if not position_bool[i][0]:
+            rate = price[symbol]
+            if random.random() > 0.5:
+                side = 'buy'
+                sashine = rate + fixar.fixa[symbol].rik
+                gyaku_sashine = rate - fixar.fixa[symbol].son
 
-        else:
-            side = 'sell'
-            sashine = rate - fixar.fixa[symbol].rik
-            gyaku_sashine = rate + fixar.fixa[symbol].son
-        """
-        fixar.make_sashine_order(symbol, side,
-                                 fixar.amount, rate,
-                                 sashine, gyaku_sashine)
-        """
-        fixar.make_nariyuki_order(symbol, side,
-                                  fixar.amount,
-                                  sashine, gyaku_sashine)
+            else:
+                side = 'sell'
+                sashine = rate - fixar.fixa[symbol].rik
+                gyaku_sashine = rate + fixar.fixa[symbol].son
+            """
+            fixar.make_sashine_order(symbol, side,
+                                    fixar.amount, rate,
+                                    sashine, gyaku_sashine)
+            """
+            try:
+                fixar.make_nariyuki_order(symbol, side,
+                                          fixar.amount,
+                                          sashine, gyaku_sashine)
+            except ElementClickInterceptedException as e:
+                print(e)
 
-        time.sleep(3)
+            time.sleep(3)
+
+    time.sleep(60 - (time.time() - t))
 # %%
-position_bool = fixar.position_bool()
-position_bool
-# %%
-position = 'buy'
-amount = 1000
-
-
-fixar.select_symbol_position(symbol, position)
-time.sleep(1)
-
-tradeticket_container = fixar.driver.find_element(
-    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-
-tradeticket_container.find_elements(
-    By.CLASS_NAME, 'checkbox')[0].click()
-tradeticket_container.find_elements(
-    By.CLASS_NAME, 'checkbox')[1].click()
-
-tradeticket_container = fixar.driver.find_element(
-    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
-# %%
-rate_inp = input_[2]
-amount_inp = input_[3]
-sashine_inp = input_[5]
-gyaku_sashine_inp = input_[7]
-
-rate_inp.clear()
-rate_inp.send_keys(rate)
-
-amount_inp.clear()
-amount_inp.send_keys(amount)
-
-sashine_inp.clear()
-sashine_inp.send_keys(sashine)
-
-gyaku_sashine_inp.clear()
-gyaku_sashine_inp.send_keys(gyaku_sashine)
-
-for _ in range(2):
-    elements = fixar.driver.find_elements(
-        By.CLASS_NAME, "Button_button__CftuL")
-    elements[1].click()
-    time.sleep(1)
-# %%
-input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
-input_[2].get_attribute('outerHTML')
-# %%
-amount_inp = input_[2]
-sashine_inp = input_[4]
-gyaku_sashine_inp = input_[7]

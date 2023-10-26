@@ -94,8 +94,8 @@ pred = pred[:, 0]
 hist_data = data_x[:, -1, 0]
 hist_data = hist_data[::base_m]
 # %%
-rik = 0.05/1
-son = 0.005/1
+rik = 0.1/1
+son = 0.03/1
 
 # kane, asset = simulate(pred, hist_data, rik, son)
 kane, asset = simulate_random(hist_data, rik, son, spread=0./100)
@@ -105,8 +105,8 @@ pd.DataFrame(asset).plot()
 # %%
 pd.DataFrame(hist_data).plot()
 # %%
-a = 6000000
-b = a+60*24*25
+a = 3400000
+b = a+60*24*5
 pd.DataFrame(asset[a:b]).plot()
 # %%
 len(asset)
