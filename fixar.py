@@ -185,6 +185,7 @@ class TraderDriver:
     def make_sashine_order(self, symbol, position, amount,
                            rate, sashine, gyaku_sashine):
         self.select_symbol_position(symbol, position)
+        time.sleep(1)
 
         tradeticket_container = self.driver.find_element(
             By.CLASS_NAME, 'TradeTicket_container__2S2h7')
@@ -211,6 +212,43 @@ class TraderDriver:
 
         rate_inp.clear()
         rate_inp.send_keys(rate)
+
+        amount_inp.clear()
+        amount_inp.send_keys(amount)
+
+        sashine_inp.clear()
+        sashine_inp.send_keys(sashine)
+
+        gyaku_sashine_inp.clear()
+        gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+        for _ in range(2):
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "Button_button__CftuL")
+            elements[1].click()
+            time.sleep(1)
+
+    def make_nariyuki_order(self, symbol, position, amount,
+                            sashine, gyaku_sashine):
+        self.select_symbol_position(symbol, position)
+        time.sleep(1)
+
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+        tradeticket_container.find_elements(
+            By.CLASS_NAME, 'checkbox')[0].click()
+        tradeticket_container.find_elements(
+            By.CLASS_NAME, 'checkbox')[1].click()
+
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+        input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+
+        amount_inp = input_[2]
+        sashine_inp = input_[4]
+        gyaku_sashine_inp = input_[6]
 
         amount_inp.clear()
         amount_inp.send_keys(amount)
@@ -561,42 +599,60 @@ position_bool = fixar.position_bool()
 
 for i in range(2):
     symbol = 'EURUSD' if i == 0 else 'USDJPY'
+    usdjpy, eurusd = fixar.get_price()
+    price = {'EURUSD': eurusd,
+             'USDJPY': usdjpy}
+
     if not position_bool[i][0]:
+        rate = price[symbol]
         if random.random() > 0.5:
-            fixar.make_order_(symbol, 'buy')
+            side = 'buy'
+            sashine = rate + fixar.fixa[symbol].rik
+            gyaku_sashine = rate - fixar.fixa[symbol].son
+
         else:
-            fixar.make_order_(symbol, 'sell')
+            side = 'sell'
+            sashine = rate - fixar.fixa[symbol].rik
+            gyaku_sashine = rate + fixar.fixa[symbol].son
+        """
+        fixar.make_sashine_order(symbol, side,
+                                 fixar.amount, rate,
+                                 sashine, gyaku_sashine)
+        """
+        fixar.make_nariyuki_order(symbol, side,
+                                  fixar.amount,
+                                  sashine, gyaku_sashine)
+
+        time.sleep(3)
 # %%
 position_bool = fixar.position_bool()
 position_bool
 # %%
-if position_bool[0][0] and position_bool[1][0]:
-    fixar.set_sashine_p2(position_bool[0][1], position_bool[1][1])
+position = 'buy'
+amount = 1000
 
-# %%
+
 fixar.select_symbol_position(symbol, position)
+time.sleep(1)
 
 tradeticket_container = fixar.driver.find_element(
     By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-ticket_dropdown = tradeticket_container.find_element(
-    By.CLASS_NAME, 'TradeTicket_dropdownMenu__3Zdn-')
-ticket_dropdown.click()
-tradeticket_container.find_elements(By.CLASS_NAME, 'item')[1].click()
 
-tradeticket_container.find_elements(By.CLASS_NAME, 'checkbox')[0].click()
-tradeticket_container.find_elements(By.CLASS_NAME, 'checkbox')[1].click()
+tradeticket_container.find_elements(
+    By.CLASS_NAME, 'checkbox')[0].click()
+tradeticket_container.find_elements(
+    By.CLASS_NAME, 'checkbox')[1].click()
 
 tradeticket_container = fixar.driver.find_element(
     By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
 input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
-
+# %%
 rate_inp = input_[2]
 amount_inp = input_[3]
 sashine_inp = input_[5]
 gyaku_sashine_inp = input_[7]
-
 
 rate_inp.clear()
 rate_inp.send_keys(rate)
@@ -610,10 +666,15 @@ sashine_inp.send_keys(sashine)
 gyaku_sashine_inp.clear()
 gyaku_sashine_inp.send_keys(gyaku_sashine)
 
-
 for _ in range(2):
     elements = fixar.driver.find_elements(
         By.CLASS_NAME, "Button_button__CftuL")
     elements[1].click()
     time.sleep(1)
 # %%
+input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+input_[2].get_attribute('outerHTML')
+# %%
+amount_inp = input_[2]
+sashine_inp = input_[4]
+gyaku_sashine_inp = input_[7]
