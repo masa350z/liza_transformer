@@ -1,4 +1,5 @@
 # %%
+import pandas as pd
 from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
@@ -152,7 +153,9 @@ class TraderDriver:
             except StaleElementReferenceException:
                 continue
 
-    def make_order(self, amount):
+    def make_order(self, symbol, position, amount):
+        self.select_symbol_position(symbol, position)
+
         amount_box = self.driver.find_element(
             By.CLASS_NAME, 'FormattedNumberInput_input__3uB6c')
         amount_box.clear()
@@ -178,6 +181,51 @@ class TraderDriver:
         buy_sell = 0 if position == 'buy' else 1
 
         order_buttons[symbol][buy_sell].click()
+
+    def make_sashine_order(self, symbol, position, amount,
+                           rate, sashine, gyaku_sashine):
+        self.select_symbol_position(symbol, position)
+
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+        ticket_dropdown = tradeticket_container.find_element(
+            By.CLASS_NAME, 'TradeTicket_dropdownMenu__3Zdn-')
+        ticket_dropdown.click()
+        tradeticket_container.find_elements(By.CLASS_NAME, 'item')[1].click()
+
+        tradeticket_container.find_elements(
+            By.CLASS_NAME, 'checkbox')[0].click()
+        tradeticket_container.find_elements(
+            By.CLASS_NAME, 'checkbox')[1].click()
+
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+        input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+
+        rate_inp = input_[2]
+        amount_inp = input_[3]
+        sashine_inp = input_[5]
+        gyaku_sashine_inp = input_[7]
+
+        rate_inp.clear()
+        rate_inp.send_keys(rate)
+
+        amount_inp.clear()
+        amount_inp.send_keys(amount)
+
+        sashine_inp.clear()
+        sashine_inp.send_keys(sashine)
+
+        gyaku_sashine_inp.clear()
+        gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+        for _ in range(2):
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "Button_button__CftuL")
+            elements[1].click()
+            time.sleep(1)
 
     def settle_all_position(self):
         elements = self.driver.find_elements(
@@ -276,16 +324,131 @@ class TraderDriver:
 
         return sum([float(i.text) for i in elements]) == 0
 
-    def close(self):
-        self.driver.close()
+    def position_bool(self):
+        sashine_eurusd, sashine_usdjpy = False, False
+        dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
+        dx_row = [i.text for i in dx_row]
+
+        bool_eurusd = 'EURUSD' in dx_row
+        bool_usdjpy = 'USDJPY' in dx_row
+
+        sashine_box = fixar.driver.find_elements(
+            By.CLASS_NAME, 'PositionGrid_iconContainer__2v8Ks')
+
+        if bool_eurusd and bool_usdjpy:
+            if not sashine_box[0].text == '':
+                sashine_eurusd = True
+            if not sashine_box[2].text == '':
+                sashine_usdjpy = True
+
+        elif bool_eurusd:
+            if not sashine_box[0].text == '':
+                sashine_eurusd = True
+
+        elif bool_usdjpy:
+            if not sashine_box[0].text == '':
+                sashine_usdjpy = True
+
+        return [bool_eurusd, sashine_eurusd], [bool_usdjpy, sashine_usdjpy]
+
+    def set_sashine_p2(self, bool_eurusd, bool_usdjpy):
+        tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
+        td_ = tbody[-2].find_elements(By.TAG_NAME, 'td')
+
+        get_eurusd = float(td_[4].text)
+        get_usdjpy = float(td_[16].text)
+
+        position_eurusd = td_[4-3].text
+        position_usdjpy = td_[16-3].text
+
+        status_list = [[get_eurusd, position_eurusd],
+                       [get_usdjpy, position_usdjpy]]
+
+        for i in range(2):
+            bool_ = bool_eurusd if i == 0 else bool_usdjpy
+            symbol = 'EURUSD' if i == 0 else 'USDJPY'
+            if not bool_:
+                tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
+                trigger = tbody[-1].find_elements(
+                    By.CLASS_NAME, 'PositionGrid_triggerContainer__1yWG1')
+
+                if i == 0:
+                    trigger[0].click()
+                else:
+                    trigger[2].click()
+                sashine_gyaku = self.driver.find_elements(
+                    By.CLASS_NAME, 'PositionGrid_PopupContainer__3AWXo')[-1]
+                sashine_gyaku.click()
+
+                rik = self.fixa[symbol].rik
+                son = self.fixa[symbol].son
+
+                if status_list[i][1] == '買い':
+                    sashine = status_list[i][0] + rik
+                    gyaku_sashine = status_list[i][0] - son
+                else:
+                    sashine = status_list[i][0] - rik
+                    gyaku_sashine = status_list[i][0] + son
+
+                self.submit_sashine(sashine, gyaku_sashine)
+                time.sleep(3)
+
+    def set_sashine_p1(self, symbol):
+        tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
+        td_ = tbody[-2].find_elements(By.TAG_NAME, 'td')
+
+        get_ = float(td_[4].text)
+        position_ = td_[4-3].text
+
+        trigger = tbody[-1].find_elements(
+            By.CLASS_NAME, 'PositionGrid_triggerContainer__1yWG1')
+        trigger[0].click()
+
+        sashine_gyaku = self.driver.find_elements(
+            By.CLASS_NAME, 'PositionGrid_PopupContainer__3AWXo')[-1]
+        sashine_gyaku.click()
+
+        rik = self.fixa[symbol].rik
+        son = self.fixa[symbol].son
+
+        if position_ == '買い':
+            sashine = get_ + rik
+            gyaku_sashine = get_ - son
+        else:
+            sashine = get_ - rik
+            gyaku_sashine = get_ + son
+
+        self.submit_sashine(sashine, gyaku_sashine)
+
+    def submit_sashine(self, sashine, gyaku_sashine):
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        inpts_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+
+        inpts_[1].clear()
+        inpts_[1].send_keys(sashine)
+
+        inpts_[3].clear()
+        inpts_[3].send_keys(gyaku_sashine)
+
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        button_ = tradeticket_container.find_elements(
+            By.CLASS_NAME, 'Button_button__CftuL')
+
+        button_[1].click()
 
 
 class FIXAR(TraderDriver):
     def __init__(self, amount):
         super().__init__()
         self.amount = amount
+        """
         self.fixa = {'EURUSD': FIXA('EURUSD', 0.005/100, 0.1/100),
                      'USDJPY': FIXA('USDJPY', 0.005, 0.1)}
+        """
+        self.fixa = {'EURUSD': FIXA('EURUSD', 0.05/100, 0.005/100),
+                     'USDJPY': FIXA('USDJPY', 0.05, 0.005)}
 
     def run(self):
         usdjpy, eurusd = self.get_price()
@@ -305,10 +468,9 @@ class FIXAR(TraderDriver):
                         time.sleep(5)
 
                     if new_position == 1:
-                        self.select_symbol_position(symbol, 'buy')
+                        self.make_order(symbol, 'buy', self.amount)
                     elif new_position == -1:
-                        self.select_symbol_position(symbol, 'sell')
-                    self.make_order(self.amount)
+                        self.make_order(symbol, 'sell', self.amount)
                     time.sleep(5)
                 else:
                     self.fixa[symbol].position = pr_position
@@ -318,8 +480,7 @@ class FIXAR(TraderDriver):
             self.driver.refresh()
 
     def run_(self):
-        # for symbol in ['EURUSD', 'USDJPY']:
-        for symbol in ['USDJPY']:
+        for symbol in ['EURUSD', 'USDJPY']:
             usdjpy, eurusd = self.get_price_()
             price = {'EURUSD': eurusd,
                      'USDJPY': usdjpy}
@@ -337,9 +498,27 @@ class FIXAR(TraderDriver):
                 elif new_position == -1:
                     self.make_order_(symbol, 'sell')
 
-        if self.fixa['USDJPY'].count % 10 == 0:
+        if self.fixa['USDJPY'].count % 5 == 0:
             # self.driver_refresh()
             self.driver.refresh()
+
+    def ret_df(self):
+        df = []
+        position_list = ['NONE', 'BUY', 'SELL']
+        for symbol in ['EURUSD', 'USDJPY']:
+            price = self.fixa[symbol].price_list[-1]
+            position = self.fixa[symbol].position
+            position_str = position_list[position]
+            get_price = self.fixa[symbol].get_price
+            price_difference = (price - get_price)*position
+
+            df.append([symbol, position_str, get_price,
+                      price, price_difference])
+
+        df = pd.DataFrame(
+            df, columns=['symbol', 'side', 'root',  'price', 'diff'])
+
+        return df
 
     def driver_refresh(self):
         super().__init__()
@@ -352,43 +531,89 @@ if __name__ == '__main__':
     time.sleep(60)
 
     while error_count < 3:
-        t = time.time()
         try:
-            fixar.run()
+            t = time.time()
+            fixar.run_()
 
             print(datetime.now())
-            print('count: {}'.format(fixar.fixa['USDJPY'].count))
-            # for symbol in ['EURUSD', 'USDJPY']:
-            for symbol in ['USDJPY']:
-                print('{} {} position: {}'.format(symbol,
-                                                  fixar.fixa[symbol].price_list[-1],
-                                                  fixar.fixa[symbol].position))
-            print('==============================\n')
+            print('count: {}\n'.format(fixar.fixa['USDJPY'].count))
+
+            print(fixar.ret_df())
+            print('============================================================\n')
 
             error_count = 0
+
+            sleep_time = 60 - (time.time() - t)
+            time.sleep(sleep_time)
+
         except Exception as e:
-            print('when main {}'.format(e))
+            print(e)
             error_count += 1
-            try:
-                fixar.driver.refresh()
-            except Exception as e:
-                print('when refreshing {}'.format(e))
-            time.sleep(10)
+            line.send_to_masaumi('FIXAR is stopped')
+            while True:
+                time.sleep(5)
 
-        sleep_time = 60 - (time.time() - t)
-        time.sleep(sleep_time)
-
-    line.send_to_masaumi('FIXAR is stopped')
-    fixar.close()
 
 # %%
 fixar = FIXAR(amount=1000)
 # %%
-order_buttons = fixar.driver.find_elements(
-    By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+position_bool = fixar.position_bool()
 
-sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
+for i in range(2):
+    symbol = 'EURUSD' if i == 0 else 'USDJPY'
+    if not position_bool[i][0]:
+        if random.random() > 0.5:
+            fixar.make_order_(symbol, 'buy')
+        else:
+            fixar.make_order_(symbol, 'sell')
+# %%
+position_bool = fixar.position_bool()
+position_bool
+# %%
+if position_bool[0][0] and position_bool[1][0]:
+    fixar.set_sashine_p2(position_bool[0][1], position_bool[1][1])
 
-usdjpy_price = float(buy_usdjpy.text.split('\n')[1])
-eurusd_price = float(buy_eurusd.text.split('\n')[1])
+# %%
+fixar.select_symbol_position(symbol, position)
+
+tradeticket_container = fixar.driver.find_element(
+    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+ticket_dropdown = tradeticket_container.find_element(
+    By.CLASS_NAME, 'TradeTicket_dropdownMenu__3Zdn-')
+ticket_dropdown.click()
+tradeticket_container.find_elements(By.CLASS_NAME, 'item')[1].click()
+
+tradeticket_container.find_elements(By.CLASS_NAME, 'checkbox')[0].click()
+tradeticket_container.find_elements(By.CLASS_NAME, 'checkbox')[1].click()
+
+tradeticket_container = fixar.driver.find_element(
+    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+
+rate_inp = input_[2]
+amount_inp = input_[3]
+sashine_inp = input_[5]
+gyaku_sashine_inp = input_[7]
+
+
+rate_inp.clear()
+rate_inp.send_keys(rate)
+
+amount_inp.clear()
+amount_inp.send_keys(amount)
+
+sashine_inp.clear()
+sashine_inp.send_keys(sashine)
+
+gyaku_sashine_inp.clear()
+gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+
+for _ in range(2):
+    elements = fixar.driver.find_elements(
+        By.CLASS_NAME, "Button_button__CftuL")
+    elements[1].click()
+    time.sleep(1)
 # %%

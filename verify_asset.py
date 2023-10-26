@@ -72,10 +72,10 @@ symbol = 'USDJPY'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
-k = 12
-pr_k = 12
+k = 3
+pr_k = 3
 
-base_m = 5
+base_m = 1
 m_lis = [base_m, base_m*2, base_m*3]
 
 weight_name = modules.ret_weight_name(symbol=symbol,
@@ -110,7 +110,7 @@ test_updn_ratio = ret_future_updn_ratio(pr_k, test_updn, test_future)
 spread = 0./100
 # spread = 0.02/100*0
 spread_mode = 'absolute'
-rik, son = 0.0005, 0.01
+rik, son = 0.005, 0.1
 
 train_asset = simulate_rikson(train_updn, train_future,
                               train_updn_ratio, spread, rik, son,
