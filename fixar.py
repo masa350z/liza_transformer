@@ -56,9 +56,21 @@ class FIXA(FX_Model):
         self.price_list = []
         self.rik, self.son = rik, son
 
-    def refresh_position(self, price, random_=False):
+    def refresh_pricelist(self, price):
         self.price_list.append(price)
         self.price_list = self.price_list[-10:]
+
+    def ret_prediction(self):
+        if len(self.price_list) < 9:
+            up_ = random.random() > 0.5
+        else:
+            inp_data = ret_inpdata(self.price_list)
+            up_ = self.make_prediction(inp_data)
+
+        return up_
+
+    def refresh_position(self, price, random_=False):
+        self.refresh_position(price)
 
         if self.position != 0:
             diff = price - self.get_price
@@ -73,8 +85,7 @@ class FIXA(FX_Model):
                 if random_:
                     up_ = random.random() > 0.5
                 else:
-                    inp_data = ret_inpdata(self.price_list)
-                    up_ = self.make_prediction(inp_data)
+                    up_ = self.ret_prediction()
 
                 if up_:
                     self.position = 1
@@ -335,7 +346,7 @@ class TraderDriver:
 
         return usdjpy, eurusd
 
-    def get_price_(self):
+    def get_price_oneclick(self):
         retry = 0
         usdjpy, eurusd = 0, 0
         while retry < 3:
@@ -363,31 +374,48 @@ class TraderDriver:
         return sum([float(i.text) for i in elements]) == 0
 
     def position_bool(self):
-        sashine_eurusd, sashine_usdjpy = False, False
+        get_price_eurusd = 0
+        now_price_eurusd = 0
+
+        get_price_usdjpy = 0
+        now_price_usdjpy = 0
+
+        position_eurusd, position_usdjpy = 0, 0
         dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
         dx_row = [i.text for i in dx_row]
 
         bool_eurusd = 'EURUSD' in dx_row
         bool_usdjpy = 'USDJPY' in dx_row
 
-        sashine_box = fixar.driver.find_elements(
-            By.CLASS_NAME, 'PositionGrid_iconContainer__2v8Ks')
-
         if bool_eurusd and bool_usdjpy:
-            if not sashine_box[0].text == '':
-                sashine_eurusd = True
-            if not sashine_box[2].text == '':
-                sashine_usdjpy = True
+            get_price_eurusd = float(dx_row[2].split('\n')[3])
+            now_price_eurusd = float(dx_row[2].split('\n')[5])
+
+            get_price_usdjpy = float(dx_row[3].split('\n')[3])
+            now_price_usdjpy = float(dx_row[3].split('\n')[5])
+
+            position_eurusd = dx_row[2].split('\n')[0]
+            position_usdjpy = dx_row[3].split('\n')[0]
+
+            position_eurusd = 1 if position_eurusd == '買い' else -1
+            position_usdjpy = 1 if position_usdjpy == '買い' else -1
 
         elif bool_eurusd:
-            if not sashine_box[0].text == '':
-                sashine_eurusd = True
+            get_price_eurusd = float(dx_row[2].split('\n')[3])
+            now_price_eurusd = float(dx_row[2].split('\n')[5])
+
+            position_eurusd = dx_row[2].split('\n')[0]
+            position_eurusd = 1 if position_eurusd == '買い' else -1
 
         elif bool_usdjpy:
-            if not sashine_box[0].text == '':
-                sashine_usdjpy = True
+            get_price_usdjpy = float(dx_row[2].split('\n')[3])
+            now_price_usdjpy = float(dx_row[2].split('\n')[5])
 
-        return [bool_eurusd, sashine_eurusd], [bool_usdjpy, sashine_usdjpy]
+            position_usdjpy = dx_row[2].split('\n')[0]
+            position_usdjpy = 1 if position_usdjpy == '買い' else -1
+
+        return [bool_eurusd, position_eurusd, get_price_eurusd, now_price_eurusd], \
+            [bool_usdjpy, position_usdjpy, get_price_usdjpy, now_price_usdjpy]
 
     def set_sashine_p2(self, bool_eurusd, bool_usdjpy):
         tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
@@ -517,9 +545,9 @@ class FIXAR(TraderDriver):
             # self.driver_refresh()
             self.driver.refresh()
 
-    def run_(self):
+    def run_oneclick(self):
         for symbol in ['EURUSD', 'USDJPY']:
-            usdjpy, eurusd = self.get_price_()
+            usdjpy, eurusd = self.get_price_oneclick()
             price = {'EURUSD': eurusd,
                      'USDJPY': usdjpy}
 
@@ -537,7 +565,6 @@ class FIXAR(TraderDriver):
                     self.make_order_(symbol, 'sell')
 
         if self.fixa['USDJPY'].count % 5 == 0:
-            # self.driver_refresh()
             self.driver.refresh()
 
     def ret_df(self):
@@ -572,7 +599,7 @@ if __name__ == '__main__':
     while error_count < 3:
         try:
             t = time.time()
-            fixar.run_()
+            fixar.run_oneclick()
 
             print(datetime.now())
             print('count: {}\n'.format(fixar.fixa['USDJPY'].count))
@@ -595,11 +622,18 @@ if __name__ == '__main__':
 """
 # %%
 fixar = FIXAR(amount=1000)
-fixar.fixa = {'EURUSD': FIXA('EURUSD', 0.1/100, 0.03/100),
-              'USDJPY': FIXA('USDJPY', 0.1, 0.03)}
+fixar.fixa = {'EURUSD': FIXA('EURUSD', 0.06/100, 0.1/100),
+              'USDJPY': FIXA('USDJPY', 0.06, 0.1)}
 time.sleep(60)
 # %%
+dynamic_rik = {'EURUSD': 0.005/100,
+               'USDJPY': 0.005}
+dynamic_son = {'EURUSD': 0.1/100,
+               'USDJPY': 0.1}
+
+count = 0
 while True:
+    # try:
     t = time.time()
     position_bool = fixar.position_bool()
 
@@ -609,9 +643,12 @@ while True:
         price = {'EURUSD': eurusd,
                  'USDJPY': usdjpy}
 
+        fixar.fixa[symbol].refresh_pricelist(price[symbol])
+
         if not position_bool[i][0]:
             rate = price[symbol]
-            if random.random() > 0.5:
+            pred = fixar.fixa[symbol].ret_prediction()
+            if pred:
                 side = 'buy'
                 sashine = rate + fixar.fixa[symbol].rik
                 gyaku_sashine = rate - fixar.fixa[symbol].son
@@ -620,19 +657,48 @@ while True:
                 side = 'sell'
                 sashine = rate - fixar.fixa[symbol].rik
                 gyaku_sashine = rate + fixar.fixa[symbol].son
-            """
-            fixar.make_sashine_order(symbol, side,
-                                    fixar.amount, rate,
-                                    sashine, gyaku_sashine)
-            """
+
             try:
                 fixar.make_nariyuki_order(symbol, side,
                                           fixar.amount,
                                           sashine, gyaku_sashine)
             except ElementClickInterceptedException as e:
                 print(e)
+        else:
+            get_price = position_bool[i][2]
+            now_price = position_bool[i][3]
+            position = position_bool[i][1]
+            price_differ = (now_price - get_price)*position
+            print(position)
+            print(price_differ)
+            print(dynamic_rik[symbol])
+
+            if price_differ > dynamic_rik[symbol] or \
+                    price_differ < -dynamic_son[symbol]:
+                fixar.settle_position(symbol)
 
             time.sleep(3)
 
-    time.sleep(60 - (time.time() - t))
+    count += 1
+    # print('{}\n{}\n__________\n'.format(count, datetime.now()))
+    if count % 5 == 0:
+        fixar.driver.refresh()
+
+    sleep_time = 60 - (time.time() - t)
+    sleep_time = sleep_time if sleep_time > 0 else 0
+    time.sleep(sleep_time)
+
+    """
+    except Exception as e:
+        print(e)
+        line.send_to_masaumi('FIXAR is stopped')
+        while True:
+            time.sleep(5)
+    """
+
+# %%
+dx_row = fixar.driver.find_elements(By.CLASS_NAME, 'dx-row')
+dx_row = [i.text for i in dx_row]
+# %%
+dx_row
 # %%

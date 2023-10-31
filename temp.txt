@@ -1,0 +1,35 @@
+WebDriverException セッション切れかも
+usdjpy, eurusd = fixar.get_price()
+spans_usdjpy = elements[0].find_elements(By.TAG_NAME, "span")
+IndexError ならセッション切れでログインできない
+
+---------------------------------------------------------------------------
+NoSuchElementException                    Traceback (most recent call last)
+c:\Users\ai-so\local_program\liza_transformer\fixar.py in line 27
+     623     gyaku_sashine = rate + fixar.fixa[symbol].son
+     625 try:
+---> 626     fixar.make_nariyuki_order(symbol, side,
+     627                               fixar.amount,
+     628                               sashine, gyaku_sashine)
+     629 except ElementClickInterceptedException as e:
+     630     print(e)
+
+c:\Users\ai-so\local_program\liza_transformer\fixar.py in line 236, in TraderDriver.make_nariyuki_order(self, symbol, position, amount, sashine, gyaku_sashine)
+    233 self.select_symbol_position(symbol, position)
+    234 time.sleep(1)
+--> 236 tradeticket_container = self.driver.find_element(
+    237     By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+    239 tradeticket_container.find_elements(
+    240     By.CLASS_NAME, 'checkbox')[0].click()
+    241 tradeticket_container.find_elements(
+    242     By.CLASS_NAME, 'checkbox')[1].click()
+
+File c:\Users\ai-so\AppData\Local\Programs\Python\Python310\lib\site-packages\selenium\webdriver\remote\webdriver.py:831, in WebDriver.find_element(self, by, value)
+    828     by = By.CSS_SELECTOR
+    829     value = f'[name="{value}"]'
+--> 831 return self.execute(Command.FIND_ELEMENT, {"using": by, "value": value})["value"]
+...
+	(No symbol) [0x00E68DB7]
+	BaseThreadInitThunk [0x75F47BA9+25]
+	RtlInitializeExceptionChain [0x76F9BD3B+107]
+	RtlClearBits [0x76F9BCBF+191]
