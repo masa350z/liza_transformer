@@ -28,6 +28,12 @@ def ret_inpdata(hist):
     return inp_data
 
 
+class ToPageRefreshError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
 class FX_Model:
     def __init__(self, symbol, base_m, k, pr_k):
         m_lis = [base_m, base_m*2, base_m*3]
@@ -47,14 +53,14 @@ class FX_Model:
 
 
 class FIXA(FX_Model):
-    def __init__(self, symbol, rik, son):
+    def __init__(self, symbol, sashine, gyakusashine):
         super().__init__(symbol, 1, 3, 3)
         self.count = 0
         self.position = 0
         self.get_price = 0
 
         self.price_list = []
-        self.rik, self.son = rik, son
+        self.sahine, self.gyakusashine = sashine, gyakusashine
 
     def refresh_pricelist(self, price):
         self.price_list.append(price)
@@ -75,9 +81,9 @@ class FIXA(FX_Model):
         if self.position != 0:
             diff = price - self.get_price
 
-            if diff*self.position > self.rik:
+            if diff*self.position > self.sahine:
                 self.position = 0
-            elif diff*self.position < -self.son:
+            elif diff*self.position < -self.gyakusashine:
                 self.position = 0
 
         if self.position == 0:
@@ -165,116 +171,130 @@ class TraderDriver:
                 continue
 
     def make_order(self, symbol, position, amount):
-        self.select_symbol_position(symbol, position)
+        try:
+            self.select_symbol_position(symbol, position)
 
-        amount_box = self.driver.find_element(
-            By.CLASS_NAME, 'FormattedNumberInput_input__3uB6c')
-        amount_box.clear()
-        amount_box.send_keys(str(amount))
+            amount_box = self.driver.find_element(
+                By.CLASS_NAME, 'FormattedNumberInput_input__3uB6c')
+            amount_box.clear()
+            amount_box.send_keys(str(amount))
 
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "Button_button__CftuL")
-        elements[1].click()
-        time.sleep(1)
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "Button_button__CftuL")
+            elements[1].click()
+            time.sleep(1)
 
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "Button_button__CftuL")
-        elements[1].click()
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "Button_button__CftuL")
+            elements[1].click()
+        except Exception as e:
+            print('Error occured make_order \n{}'.format(e))
 
-    def make_order_(self, symbol, position):
-        order_buttons = self.driver.find_elements(
-            By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
-        sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
+    def make_oneclick_order(self, symbol, position):
+        try:
+            order_buttons = self.driver.find_elements(
+                By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+            sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
 
-        order_buttons = {'EURUSD': [buy_eurusd, sell_eurusd],
-                         'USDJPY': [buy_usdjpy, sell_usdjpy]}
+            order_buttons = {'EURUSD': [buy_eurusd, sell_eurusd],
+                             'USDJPY': [buy_usdjpy, sell_usdjpy]}
 
-        buy_sell = 0 if position == 'buy' else 1
+            buy_sell = 0 if position == 'buy' else 1
 
-        order_buttons[symbol][buy_sell].click()
+            order_buttons[symbol][buy_sell].click()
+        except Exception as e:
+            print('Error occured make_oneclick_order \n{}'.format(e))
 
     def make_sashine_order(self, symbol, position, amount,
                            rate, sashine, gyaku_sashine):
-        self.select_symbol_position(symbol, position)
-        time.sleep(1)
-
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-        ticket_dropdown = tradeticket_container.find_element(
-            By.CLASS_NAME, 'TradeTicket_dropdownMenu__3Zdn-')
-        ticket_dropdown.click()
-        tradeticket_container.find_elements(By.CLASS_NAME, 'item')[1].click()
-
-        tradeticket_container.find_elements(
-            By.CLASS_NAME, 'checkbox')[0].click()
-        tradeticket_container.find_elements(
-            By.CLASS_NAME, 'checkbox')[1].click()
-
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-        input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
-
-        rate_inp = input_[2]
-        amount_inp = input_[3]
-        sashine_inp = input_[5]
-        gyaku_sashine_inp = input_[7]
-
-        rate_inp.clear()
-        rate_inp.send_keys(rate)
-
-        amount_inp.clear()
-        amount_inp.send_keys(amount)
-
-        sashine_inp.clear()
-        sashine_inp.send_keys(sashine)
-
-        gyaku_sashine_inp.clear()
-        gyaku_sashine_inp.send_keys(gyaku_sashine)
-
-        for _ in range(2):
-            elements = self.driver.find_elements(
-                By.CLASS_NAME, "Button_button__CftuL")
-            elements[1].click()
+        try:
+            self.select_symbol_position(symbol, position)
             time.sleep(1)
+
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+            ticket_dropdown = tradeticket_container.find_element(
+                By.CLASS_NAME, 'TradeTicket_dropdownMenu__3Zdn-')
+            ticket_dropdown.click()
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'item')[1].click()
+
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[0].click()
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[1].click()
+
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+            input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+
+            rate_inp = input_[2]
+            amount_inp = input_[3]
+            sashine_inp = input_[5]
+            gyaku_sashine_inp = input_[7]
+
+            rate_inp.clear()
+            rate_inp.send_keys(rate)
+
+            amount_inp.clear()
+            amount_inp.send_keys(amount)
+
+            sashine_inp.clear()
+            sashine_inp.send_keys(sashine)
+
+            gyaku_sashine_inp.clear()
+            gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+            for _ in range(2):
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "Button_button__CftuL")
+                elements[1].click()
+                time.sleep(1)
+        except Exception as e:
+            print('Error occured make_sashine_order \n{}'.format(e))
 
     def make_nariyuki_order(self, symbol, position, amount,
                             sashine, gyaku_sashine):
-        self.select_symbol_position(symbol, position)
-        time.sleep(1)
-
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-        tradeticket_container.find_elements(
-            By.CLASS_NAME, 'checkbox')[0].click()
-        tradeticket_container.find_elements(
-            By.CLASS_NAME, 'checkbox')[1].click()
-
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-        input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
-
-        amount_inp = input_[2]
-        sashine_inp = input_[4]
-        gyaku_sashine_inp = input_[6]
-
-        amount_inp.clear()
-        amount_inp.send_keys(amount)
-
-        sashine_inp.clear()
-        sashine_inp.send_keys(sashine)
-
-        gyaku_sashine_inp.clear()
-        gyaku_sashine_inp.send_keys(gyaku_sashine)
-
-        for _ in range(2):
-            elements = self.driver.find_elements(
-                By.CLASS_NAME, "Button_button__CftuL")
-            elements[1].click()
+        try:
+            self.select_symbol_position(symbol, position)
             time.sleep(1)
+
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[0].click()
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[1].click()
+
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+
+            input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+
+            amount_inp = input_[2]
+            sashine_inp = input_[4]
+            gyaku_sashine_inp = input_[6]
+
+            amount_inp.clear()
+            amount_inp.send_keys(amount)
+
+            sashine_inp.clear()
+            sashine_inp.send_keys(sashine)
+
+            gyaku_sashine_inp.clear()
+            gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+            for _ in range(2):
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "Button_button__CftuL")
+                elements[1].click()
+                time.sleep(1)
+
+        except Exception as e:
+            print('Error occured make_nariyuki_order \n{}'.format(e))
 
     def settle_all_position(self):
         elements = self.driver.find_elements(
@@ -320,7 +340,11 @@ class TraderDriver:
             try:
                 elements = self.driver.find_elements(
                     By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
-                spans_usdjpy = elements[0].find_elements(By.TAG_NAME, "span")
+                try:
+                    spans_usdjpy = elements[0].find_elements(
+                        By.TAG_NAME, "span")
+                except IndexError as e:
+                    raise ToPageRefreshError(e)
                 usdjpy = ''
                 for i in spans_usdjpy:
                     usdjpy += i.text
@@ -333,7 +357,11 @@ class TraderDriver:
             try:
                 elements = self.driver.find_elements(
                     By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
-                spans_eurusd = elements[2].find_elements(By.TAG_NAME, "span")
+                try:
+                    spans_eurusd = elements[2].find_elements(
+                        By.TAG_NAME, "span")
+                except IndexError as e:
+                    raise ToPageRefreshError(e)
                 eurusd = ''
                 for i in spans_eurusd:
                     eurusd += i.text
@@ -506,15 +534,13 @@ class TraderDriver:
 
 
 class FIXAR(TraderDriver):
-    def __init__(self, amount):
+    def __init__(self, amount,
+                 sashine_eurusd, gyaku_sashine_eurusd,
+                 sashine_usdjpy, gyaku_sashine_usdjpy):
         super().__init__()
         self.amount = amount
-        """
-        self.fixa = {'EURUSD': FIXA('EURUSD', 0.005/100, 0.1/100),
-                     'USDJPY': FIXA('USDJPY', 0.005, 0.1)}
-        """
-        self.fixa = {'EURUSD': FIXA('EURUSD', 0.1/100, 0.03/100),
-                     'USDJPY': FIXA('USDJPY', 0.1, 0.03)}
+        self.fixa = {'EURUSD': FIXA('EURUSD', sashine_eurusd, gyaku_sashine_eurusd),
+                     'USDJPY': FIXA('USDJPY', sashine_usdjpy, gyaku_sashine_usdjpy)}
 
     def run(self):
         usdjpy, eurusd = self.get_price()
@@ -560,9 +586,9 @@ class FIXAR(TraderDriver):
                     self.settle_position(symbol)
 
                 if new_position == 1:
-                    self.make_order_(symbol, 'buy')
+                    self.make_oneclick_order(symbol, 'buy')
                 elif new_position == -1:
-                    self.make_order_(symbol, 'sell')
+                    self.make_oneclick_order(symbol, 'sell')
 
         if self.fixa['USDJPY'].count % 5 == 0:
             self.driver.refresh()
@@ -589,98 +615,85 @@ class FIXAR(TraderDriver):
         super().__init__()
 
 
+class FIXAR_V2(FIXAR):
+    def __init__(self, amount,
+                 sashine_eurusd, gyaku_sashine_eurusd,
+                 sashine_usdjpy, gyaku_sashine_usdjpy,
+                 dynamic_rik, dynamic_son):
+        super().__init__(amount,
+                         sashine_eurusd, gyaku_sashine_eurusd,
+                         sashine_usdjpy, gyaku_sashine_usdjpy)
+
+        self.dynamic_rik, self.dynamic_son = dynamic_rik, dynamic_son
+
+    def run(self):
+        position_bool = self.position_bool()
+
+        for i in range(2):
+            symbol = 'EURUSD' if i == 0 else 'USDJPY'
+            usdjpy, eurusd = self.get_price()
+            price = {'EURUSD': eurusd,
+                     'USDJPY': usdjpy}
+
+            self.fixa[symbol].refresh_pricelist(price[symbol])
+
+            if not position_bool[i][0]:
+                rate = price[symbol]
+                pred = self.fixa[symbol].ret_prediction()
+                if pred:
+                    side = 'buy'
+                    sashine = rate + self.fixa[symbol].sahine
+                    gyaku_sashine = rate - self.fixa[symbol].gyakusashine
+
+                else:
+                    side = 'sell'
+                    sashine = rate - self.fixa[symbol].sahine
+                    gyaku_sashine = rate + self.fixa[symbol].gyakusashine
+
+                self.make_nariyuki_order(symbol, side,
+                                         self.amount,
+                                         sashine, gyaku_sashine)
+
+            else:
+                get_price = position_bool[i][2]
+                now_price = position_bool[i][3]
+                position = position_bool[i][1]
+                price_differ = (now_price - get_price)*position
+                print(position)
+                print(price_differ)
+                print(self.dynamic_rik[symbol])
+
+                if price_differ > self.dynamic_rik[symbol] or \
+                        price_differ < -self.dynamic_son[symbol]:
+                    self.settle_position(symbol)
+
+                time.sleep(3)
+
+
 # %%
-"""
-if __name__ == '__main__':
-    fixar = FIXAR(amount=1000)
-    error_count = 0
-    time.sleep(60)
-
-    while error_count < 3:
-        try:
-            t = time.time()
-            fixar.run_oneclick()
-
-            print(datetime.now())
-            print('count: {}\n'.format(fixar.fixa['USDJPY'].count))
-
-            print(fixar.ret_df())
-            print('============================================================\n')
-
-            error_count = 0
-
-            sleep_time = 60 - (time.time() - t)
-            time.sleep(sleep_time)
-
-        except Exception as e:
-            print(e)
-            error_count += 1
-            line.send_to_masaumi('FIXAR is stopped')
-            while True:
-                time.sleep(5)
-
-"""
-# %%
-fixar = FIXAR(amount=1000)
-fixar.fixa = {'EURUSD': FIXA('EURUSD', 0.06/100, 0.1/100),
-              'USDJPY': FIXA('USDJPY', 0.06, 0.1)}
-time.sleep(60)
-# %%
+amount = 1000
 dynamic_rik = {'EURUSD': 0.005/100,
                'USDJPY': 0.005}
 dynamic_son = {'EURUSD': 0.1/100,
                'USDJPY': 0.1}
 
+fixar = FIXAR_V2(amount,
+                 0.06/100, 0.1/100,
+                 0.06, 0.1,
+                 dynamic_rik, dynamic_son)
+time.sleep(60)
+# %%
+
+
 count = 0
 while True:
     # try:
     t = time.time()
-    position_bool = fixar.position_bool()
 
-    for i in range(2):
-        symbol = 'EURUSD' if i == 0 else 'USDJPY'
-        usdjpy, eurusd = fixar.get_price()
-        price = {'EURUSD': eurusd,
-                 'USDJPY': usdjpy}
-
-        fixar.fixa[symbol].refresh_pricelist(price[symbol])
-
-        if not position_bool[i][0]:
-            rate = price[symbol]
-            pred = fixar.fixa[symbol].ret_prediction()
-            if pred:
-                side = 'buy'
-                sashine = rate + fixar.fixa[symbol].rik
-                gyaku_sashine = rate - fixar.fixa[symbol].son
-
-            else:
-                side = 'sell'
-                sashine = rate - fixar.fixa[symbol].rik
-                gyaku_sashine = rate + fixar.fixa[symbol].son
-
-            try:
-                fixar.make_nariyuki_order(symbol, side,
-                                          fixar.amount,
-                                          sashine, gyaku_sashine)
-            except ElementClickInterceptedException as e:
-                print(e)
-        else:
-            get_price = position_bool[i][2]
-            now_price = position_bool[i][3]
-            position = position_bool[i][1]
-            price_differ = (now_price - get_price)*position
-            print(position)
-            print(price_differ)
-            print(dynamic_rik[symbol])
-
-            if price_differ > dynamic_rik[symbol] or \
-                    price_differ < -dynamic_son[symbol]:
-                fixar.settle_position(symbol)
-
-            time.sleep(3)
+    fixar.run()
 
     count += 1
-    # print('{}\n{}\n__________\n'.format(count, datetime.now()))
+    print('{}\n{}\n__________\n'.format(count, datetime.now()))
     if count % 5 == 0:
         fixar.driver.refresh()
 
@@ -696,9 +709,4 @@ while True:
             time.sleep(5)
     """
 
-# %%
-dx_row = fixar.driver.find_elements(By.CLASS_NAME, 'dx-row')
-dx_row = [i.text for i in dx_row]
-# %%
-dx_row
 # %%
