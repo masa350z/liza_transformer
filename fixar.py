@@ -1,6 +1,6 @@
 # %%
 import pandas as pd
-from selenium.common.exceptions import StaleElementReferenceException, ElementClickInterceptedException
+from selenium.common.exceptions import StaleElementReferenceException, WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -396,10 +396,15 @@ class TraderDriver:
         return usdjpy, eurusd
 
     def zero_spread(self):
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "BidAskSpread_spread__21ZFB")
+        try:
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "BidAskSpread_spread__21ZFB")
 
-        return sum([float(i.text) for i in elements]) == 0
+            return sum([float(i.text) for i in elements]) == 0
+
+        except Exception as e:
+            print('Error Occured zero_spread \n{}'.format(e))
+            return False
 
     def position_bool(self):
         get_price_eurusd = 0
@@ -409,41 +414,45 @@ class TraderDriver:
         now_price_usdjpy = 0
 
         position_eurusd, position_usdjpy = 0, 0
-        dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
-        dx_row = [i.text for i in dx_row]
+        try:
+            dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
+            dx_row = [i.text for i in dx_row]
 
-        bool_eurusd = 'EURUSD' in dx_row
-        bool_usdjpy = 'USDJPY' in dx_row
+            bool_eurusd = 'EURUSD' in dx_row
+            bool_usdjpy = 'USDJPY' in dx_row
 
-        if bool_eurusd and bool_usdjpy:
-            get_price_eurusd = float(dx_row[2].split('\n')[3])
-            now_price_eurusd = float(dx_row[2].split('\n')[5])
+            if bool_eurusd and bool_usdjpy:
+                get_price_eurusd = float(dx_row[2].split('\n')[3])
+                now_price_eurusd = float(dx_row[2].split('\n')[5])
 
-            get_price_usdjpy = float(dx_row[3].split('\n')[3])
-            now_price_usdjpy = float(dx_row[3].split('\n')[5])
+                get_price_usdjpy = float(dx_row[3].split('\n')[3])
+                now_price_usdjpy = float(dx_row[3].split('\n')[5])
 
-            position_eurusd = dx_row[2].split('\n')[0]
-            position_usdjpy = dx_row[3].split('\n')[0]
+                position_eurusd = dx_row[2].split('\n')[0]
+                position_usdjpy = dx_row[3].split('\n')[0]
 
-            position_eurusd = 1 if position_eurusd == '買い' else -1
-            position_usdjpy = 1 if position_usdjpy == '買い' else -1
+                position_eurusd = 1 if position_eurusd == '買い' else -1
+                position_usdjpy = 1 if position_usdjpy == '買い' else -1
 
-        elif bool_eurusd:
-            get_price_eurusd = float(dx_row[2].split('\n')[3])
-            now_price_eurusd = float(dx_row[2].split('\n')[5])
+            elif bool_eurusd:
+                get_price_eurusd = float(dx_row[2].split('\n')[3])
+                now_price_eurusd = float(dx_row[2].split('\n')[5])
 
-            position_eurusd = dx_row[2].split('\n')[0]
-            position_eurusd = 1 if position_eurusd == '買い' else -1
+                position_eurusd = dx_row[2].split('\n')[0]
+                position_eurusd = 1 if position_eurusd == '買い' else -1
 
-        elif bool_usdjpy:
-            get_price_usdjpy = float(dx_row[2].split('\n')[3])
-            now_price_usdjpy = float(dx_row[2].split('\n')[5])
+            elif bool_usdjpy:
+                get_price_usdjpy = float(dx_row[2].split('\n')[3])
+                now_price_usdjpy = float(dx_row[2].split('\n')[5])
 
-            position_usdjpy = dx_row[2].split('\n')[0]
-            position_usdjpy = 1 if position_usdjpy == '買い' else -1
+                position_usdjpy = dx_row[2].split('\n')[0]
+                position_usdjpy = 1 if position_usdjpy == '買い' else -1
 
-        return [bool_eurusd, position_eurusd, get_price_eurusd, now_price_eurusd], \
-            [bool_usdjpy, position_usdjpy, get_price_usdjpy, now_price_usdjpy]
+            return [bool_eurusd, position_eurusd, get_price_eurusd, now_price_eurusd], \
+                [bool_usdjpy, position_usdjpy, get_price_usdjpy, now_price_usdjpy]
+        except WebDriverException as e:
+            print('Error Occured position_bool \n{}'.format(e))
+            raise ToPageRefreshError(e)
 
     def set_sashine_p2(self, bool_eurusd, bool_usdjpy):
         tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
@@ -626,71 +635,75 @@ class FIXAR_V2(FIXAR):
 
         self.dynamic_rik, self.dynamic_son = dynamic_rik, dynamic_son
 
-    def run(self):
-        position_bool = self.position_bool()
-
-        for i in range(2):
-            symbol = 'EURUSD' if i == 0 else 'USDJPY'
-            usdjpy, eurusd = self.get_price()
-            price = {'EURUSD': eurusd,
+    def ret_pricedic(self):
+        usdjpy, eurusd = self.get_price()
+        price_dic = {'EURUSD': eurusd,
                      'USDJPY': usdjpy}
 
-            self.fixa[symbol].refresh_pricelist(price[symbol])
+        return price_dic
 
-            if not position_bool[i][0]:
-                rate = price[symbol]
-                pred = self.fixa[symbol].ret_prediction()
-                if pred:
-                    side = 'buy'
-                    sashine = rate + self.fixa[symbol].sahine
-                    gyaku_sashine = rate - self.fixa[symbol].gyakusashine
+    def run(self):
+        for i in range(2):
+            symbol = 'EURUSD' if i == 0 else 'USDJPY'
 
-                else:
-                    side = 'sell'
-                    sashine = rate - self.fixa[symbol].sahine
-                    gyaku_sashine = rate + self.fixa[symbol].gyakusashine
+            position_bool = self.position_bool()
+            self.fixa[symbol].refresh_pricelist(self.ret_pricedic()[symbol])
 
-                self.make_nariyuki_order(symbol, side,
-                                         self.amount,
-                                         sashine, gyaku_sashine)
-
-            else:
+            if position_bool[i][0]:
                 get_price = position_bool[i][2]
                 now_price = position_bool[i][3]
                 position = position_bool[i][1]
                 price_differ = (now_price - get_price)*position
-                print(position)
-                print(price_differ)
-                print(self.dynamic_rik[symbol])
 
                 if price_differ > self.dynamic_rik[symbol] or \
                         price_differ < -self.dynamic_son[symbol]:
                     self.settle_position(symbol)
-
                 time.sleep(3)
+
+            else:
+                if self.zero_spread():
+                    rate = self.ret_pricedic()[symbol]
+                    pred = self.fixa[symbol].ret_prediction()
+
+                    side = 'buy' if pred else 'sell'
+                    sashine = rate + \
+                        (self.fixa[symbol].sahine)*(1 if pred else -1)
+                    gyaku_sashine = rate - \
+                        (self.fixa[symbol].gyakusashine)*(1 if pred else -1)
+
+                    self.make_nariyuki_order(symbol, side,
+                                             self.amount,
+                                             sashine, gyaku_sashine)
+                    time.sleep(3)
 
 
 # %%
 amount = 1000
-dynamic_rik = {'EURUSD': 0.005/100,
-               'USDJPY': 0.005}
-dynamic_son = {'EURUSD': 0.1/100,
-               'USDJPY': 0.1}
+
+sashine_eurusd, gyaku_sashine_eurusd = 0.06/100, 0.1/100
+sashine_usdjpy, gyaku_sashine_usdjpy = 0.06, 0.1
+
+dynamic_rik = {'EURUSD': 0.005/100, 'USDJPY': 0.005}
+dynamic_son = {'EURUSD': 0.1/100, 'USDJPY': 0.1}
 
 fixar = FIXAR_V2(amount,
-                 0.06/100, 0.1/100,
-                 0.06, 0.1,
+                 sashine_eurusd, gyaku_sashine_eurusd,
+                 sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son)
 time.sleep(60)
 # %%
 
-
 count = 0
 while True:
-    # try:
-    t = time.time()
+    try:
+        t = time.time()
 
-    fixar.run()
+        fixar.run()
+
+    except ToPageRefreshError as e:
+        print(e)
+        fixar.driver.refresh()
+        line.send_to_masaumi(e)
 
     count += 1
     print('{}\n{}\n__________\n'.format(count, datetime.now()))
@@ -700,13 +713,5 @@ while True:
     sleep_time = 60 - (time.time() - t)
     sleep_time = sleep_time if sleep_time > 0 else 0
     time.sleep(sleep_time)
-
-    """
-    except Exception as e:
-        print(e)
-        line.send_to_masaumi('FIXAR is stopped')
-        while True:
-            time.sleep(5)
-    """
 
 # %%
