@@ -1,6 +1,7 @@
 # %%
 import pandas as pd
-from selenium.common.exceptions import StaleElementReferenceException, WebDriverException
+from selenium.common.exceptions import StaleElementReferenceException, WebDriverException, NoSuchElementException, \
+    ElementClickInterceptedException, NoSuchWindowException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -34,6 +35,18 @@ class ToPageRefreshError(Exception):
         super().__init__(self.message)
 
 
+class ToDriverRefreshError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
+class HumanChallengeError(Exception):
+    def __init__(self):
+        self.message = 'human challenge needed'
+        super().__init__(self.message)
+
+
 class FX_Model:
     def __init__(self, symbol, base_m, k, pr_k):
         m_lis = [base_m, base_m*2, base_m*3]
@@ -47,7 +60,7 @@ class FX_Model:
         self.model.load_weights(weight_name + '/best_weights')
 
     def make_prediction(self, inp_data):
-        prediction = self.model.predict(inp_data)[0]
+        prediction = self.model.predict(inp_data, verbose=0)[0]
 
         return prediction[0] > 0.5
 
@@ -124,8 +137,8 @@ class TraderDriver:
         # プロファイルの名前
         PROFILE_DIR: str = "FIXAR"
 
-        # options.add_argument(f"user-data-dir={PROFILE_PATH}")
-        # options.add_argument(f"profile-directory={PROFILE_DIR}")
+        options.add_argument(f"user-data-dir={PROFILE_PATH}")
+        options.add_argument(f"profile-directory={PROFILE_DIR}")
         options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 
@@ -135,23 +148,44 @@ class TraderDriver:
         self.wait = WebDriverWait(self.driver, 60)
         self.actions = ActionChains(self.driver)
 
-        self.button_dic = {'USDJPY': {'sell': 0,
-                                      'buy': 1},
-                           'EURUSD': {'sell': 2,
-                                      'buy': 3}}
+        self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
+                           'EURUSD': {'sell': 2, 'buy': 3}}
 
         self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
 
     def login(self):
-        self.driver.find_element(
-            By.ID, "email").send_keys('msum4524@gmail.com')
-        self.driver.find_element(By.ID, "password").send_keys('masaumi73177@T')
+        time.sleep(3)
+        try:
+            if fixar.driver.find_element(By.ID, "email"):
+                self.driver.find_element(By.ID, "email").send_keys('a')
+                self.driver.find_element(By.ID, "email").clear()
+                self.driver.find_element(
+                    By.ID, "email").send_keys('msum4524@gmail.com')
 
-        spans = self.driver.find_elements(By.TAG_NAME, "span")
+                self.driver.find_element(By.ID, "password").send_keys('a')
+                self.driver.find_element(By.ID, "password").clear()
+                self.driver.find_element(
+                    By.ID, "password").send_keys('masaumi73177@T')
 
-        for i in spans:
-            if i.text == 'ログイン':
-                i.click()
+                spans = self.driver.find_elements(By.TAG_NAME, "span")
+
+                for i in spans:
+                    if i.text == 'ログイン':
+                        i.click()
+
+                iframe = fixar.driver.find_elements(By.TAG_NAME, "iframe")
+                for i in iframe:
+                    if '<iframe src=' in i.get_attribute('outerHTML'):
+                        iframe = i
+                        break
+                time.sleep(1)
+                if 'relative; width:' in iframe.get_attribute('outerHTML'):
+                    raise HumanChallengeError()
+            else:
+                pass
+
+        except NoSuchElementException:
+            pass
 
     def select_symbol_position(self, symbol, position):
         retry = True
@@ -187,6 +221,11 @@ class TraderDriver:
             elements = self.driver.find_elements(
                 By.CLASS_NAME, "Button_button__CftuL")
             elements[1].click()
+
+        except ElementClickInterceptedException as e:
+            print('Error occured make_nariyuki_order \n{}'.format(e))
+            raise ToPageRefreshError(e)
+
         except Exception as e:
             print('Error occured make_order \n{}'.format(e))
 
@@ -202,6 +241,11 @@ class TraderDriver:
             buy_sell = 0 if position == 'buy' else 1
 
             order_buttons[symbol][buy_sell].click()
+
+        except ElementClickInterceptedException as e:
+            print('Error occured make_nariyuki_order \n{}'.format(e))
+            raise ToPageRefreshError(e)
+
         except Exception as e:
             print('Error occured make_oneclick_order \n{}'.format(e))
 
@@ -252,6 +296,11 @@ class TraderDriver:
                     By.CLASS_NAME, "Button_button__CftuL")
                 elements[1].click()
                 time.sleep(1)
+
+        except ElementClickInterceptedException as e:
+            print('Error occured make_nariyuki_order \n{}'.format(e))
+            raise ToPageRefreshError(e)
+
         except Exception as e:
             print('Error occured make_sashine_order \n{}'.format(e))
 
@@ -292,6 +341,10 @@ class TraderDriver:
                     By.CLASS_NAME, "Button_button__CftuL")
                 elements[1].click()
                 time.sleep(1)
+
+        except ElementClickInterceptedException as e:
+            print('Error occured make_nariyuki_order \n{}'.format(e))
+            raise ToPageRefreshError(e)
 
         except Exception as e:
             print('Error occured make_nariyuki_order \n{}'.format(e))
@@ -452,7 +505,7 @@ class TraderDriver:
                 [bool_usdjpy, position_usdjpy, get_price_usdjpy, now_price_usdjpy]
         except WebDriverException as e:
             print('Error Occured position_bool \n{}'.format(e))
-            raise ToPageRefreshError(e)
+            raise ToDriverRefreshError(e)
 
     def set_sashine_p2(self, bool_eurusd, bool_usdjpy):
         tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
@@ -621,6 +674,11 @@ class FIXAR(TraderDriver):
         return df
 
     def driver_refresh(self):
+        try:
+            self.driver.close()
+        except NoSuchWindowException:
+            pass
+
         super().__init__()
 
 
@@ -690,20 +748,45 @@ fixar = FIXAR_V2(amount,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son)
-time.sleep(60)
 # %%
-
+try:
+    fixar.login()
+except HumanChallengeError as e:
+    print(e)
+time.sleep(30)
+# %%
 count = 0
 while True:
+    t = time.time()
     try:
-        t = time.time()
-
         fixar.run()
 
     except ToPageRefreshError as e:
         print(e)
+        line.send_to_masaumi(str(e))
         fixar.driver.refresh()
-        line.send_to_masaumi(e)
+        try:
+            fixar.login()
+        except HumanChallengeError as e:
+            print(e)
+            line.send_to_masaumi('human challenge needed \n{}'.format(e))
+            break
+
+    except ToDriverRefreshError as e:
+        print(e)
+        line.send_to_masaumi(str(e))
+        fixar.driver_refresh()
+        try:
+            fixar.login()
+        except HumanChallengeError as e:
+            print(e)
+            line.send_to_masaumi('human challenge needed \n{}'.format(e))
+            break
+
+    except Exception as e:
+        print(e)
+        line.send_to_masaumi('fatal error occuered \n{}'.format(e))
+        break
 
     count += 1
     print('{}\n{}\n__________\n'.format(count, datetime.now()))

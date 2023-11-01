@@ -4,12 +4,13 @@ import pandas as pd
 import numpy as np
 
 
-def simulate(hist_data, rik, son, spread=0, pred=None):
+def simulate(hist_data, rik, son, spread=0, pred=None, std_lis=None, std_v=float('inf')):
     kane = 0
     asset = []
     profit_list = []
     get_price = 0
     position = 0
+    std_lis = std_lis if std_lis is not None else np.ones(len(hist_data))
     for h, i in enumerate(hist_data):
         if get_price != 0:
             if (i - get_price)*position > rik:
@@ -24,7 +25,7 @@ def simulate(hist_data, rik, son, spread=0, pred=None):
                 profit_list.append(profit)
                 get_price = 0
 
-        if get_price == 0:
+        if get_price == 0 and std_lis[h] < std_v:
             get_price = i
             if pred is None:
                 up_ = np.random.random() > 0.5
@@ -68,10 +69,22 @@ pred = pred[:, 0]
 hist_data = data_x[:, -1, 0]
 hist_data = hist_data[::base_m]
 # %%
+std_ = np.prod(np.std(data_x, axis=2), axis=1)
+
+std_ave = np.average(std_)
+std_std = np.std(std_)
+# %%
+std_ave, std_std
+# %%
+data_x.shape
+# %%
 rik = 0.005
 son = 0.1
 
-kane, asset, profit_list = simulate(hist_data, rik, son, pred=pred)
+kane, asset, profit_list = simulate(hist_data, rik, son,
+                                    pred=pred,
+                                    std_lis=std_,
+                                    std_v=5.368888e-06+(0.00082402374)*1.2)
 kane
 # %%
 pd.DataFrame(asset).plot()
