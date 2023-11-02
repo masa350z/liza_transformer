@@ -1,7 +1,8 @@
 # %%
+import subprocess
 import pandas as pd
 from selenium.common.exceptions import StaleElementReferenceException, WebDriverException, NoSuchElementException, \
-    ElementClickInterceptedException, NoSuchWindowException
+    ElementClickInterceptedException, NoSuchWindowException, InvalidSessionIdException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -154,9 +155,9 @@ class TraderDriver:
         self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
 
     def login(self):
-        time.sleep(3)
+        time.sleep(1)
         try:
-            if fixar.driver.find_element(By.ID, "email"):
+            if self.driver.find_element(By.ID, "email"):
                 self.driver.find_element(By.ID, "email").send_keys('a')
                 self.driver.find_element(By.ID, "email").clear()
                 self.driver.find_element(
@@ -595,7 +596,27 @@ class TraderDriver:
         button_[1].click()
 
 
-class FIXAR(TraderDriver):
+class NTraderDriver(TraderDriver):
+    def __init__(self):
+        options = webdriver.ChromeOptions()
+        subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                        '-remote-debugging-port=9222',
+                        '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
+        options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+
+        chrome_service = fs.Service(
+            executable_path=ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=chrome_service, options=options)
+        self.wait = WebDriverWait(self.driver, 60)
+        self.actions = ActionChains(self.driver)
+
+        self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
+                           'EURUSD': {'sell': 2, 'buy': 3}}
+
+        self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
+
+
+class FIXAR(NTraderDriver):
     def __init__(self, amount,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy):
@@ -676,7 +697,7 @@ class FIXAR(TraderDriver):
     def driver_refresh(self):
         try:
             self.driver.close()
-        except NoSuchWindowException:
+        except (NoSuchWindowException, InvalidSessionIdException):
             pass
 
         super().__init__()
@@ -749,6 +770,10 @@ fixar = FIXAR_V2(amount,
                  sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son)
 # %%
+# nt = NTraderDriver()
+# %%
+# nt.select_symbol_position('USDJPY', 'buy')
+# %%
 try:
     fixar.login()
 except HumanChallengeError as e:
@@ -763,7 +788,6 @@ while True:
 
     except ToPageRefreshError as e:
         print(e)
-        line.send_to_masaumi(str(e))
         fixar.driver.refresh()
         try:
             fixar.login()
@@ -774,7 +798,6 @@ while True:
 
     except ToDriverRefreshError as e:
         print(e)
-        line.send_to_masaumi(str(e))
         fixar.driver_refresh()
         try:
             fixar.login()
@@ -798,3 +821,6 @@ while True:
     time.sleep(sleep_time)
 
 # %%
+round(0.1/150, 5)
+# %%
+round(0.005/150, 5)

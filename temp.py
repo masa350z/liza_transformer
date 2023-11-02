@@ -1,12 +1,8 @@
 # %%
-from selenium.webdriver.common.by import By
-import time
+import subprocess
 
-from fixar import FIXAR
+subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                '-remote-debugging-port=9222',
+                '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
+
 # %%
-fixar = FIXAR()
-time.sleep(60)
-
-elements = fixar.driver.find_elements(
-    By.XPATH, '//tr[@class="dx-row dx-data-row dx-row-lines"]')
-elements[1].text
