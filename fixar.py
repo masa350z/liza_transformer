@@ -597,12 +597,11 @@ class TraderDriver:
 
 
 class NTraderDriver(TraderDriver):
-    def __init__(self):
+    def __init__(self, chrome_port=9222):
         options = webdriver.ChromeOptions()
-        subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-                        '-remote-debugging-port=9222',
-                        '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
-        options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+        options.add_argument("--no-sandbox")
+        options.add_experimental_option(
+            "debuggerAddress", "127.0.0.1:{}".format(chrome_port))
 
         chrome_service = fs.Service(
             executable_path=ChromeDriverManager().install())
@@ -757,13 +756,17 @@ class FIXAR_V2(FIXAR):
 
 
 # %%
+chrome_port = 9222
+subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                '-remote-debugging-port={}'.format(chrome_port),
+                '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
 amount = 1000
 
 sashine_eurusd, gyaku_sashine_eurusd = 0.06/100, 0.1/100
 sashine_usdjpy, gyaku_sashine_usdjpy = 0.06, 0.1
 
 dynamic_rik = {'EURUSD': 0.005/100, 'USDJPY': 0.005}
-dynamic_son = {'EURUSD': 0.1/100, 'USDJPY': 0.1}
+dynamic_son = {'EURUSD': round(0.1/150, 5), 'USDJPY': 0.1}
 
 fixar = FIXAR_V2(amount,
                  sashine_eurusd, gyaku_sashine_eurusd,
