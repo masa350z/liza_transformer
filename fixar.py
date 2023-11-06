@@ -10,6 +10,8 @@ from selenium.webdriver.chrome import service as fs
 from selenium.webdriver.common.by import By
 from selenium import webdriver
 
+import undetected_chromedriver as uc
+
 from modules import models, modules
 import line
 
@@ -30,14 +32,20 @@ def ret_inpdata(hist):
     return inp_data
 
 
+def launch_chrome(chrome_port):
+    subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                    '-remote-debugging-port={}'.format(chrome_port),
+                    '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
+
+
 class ToPageRefreshError(Exception):
-    def __init__(self, message):
+    def __init__(self, message=None):
         self.message = message
         super().__init__(self.message)
 
 
 class ToDriverRefreshError(Exception):
-    def __init__(self, message):
+    def __init__(self, message=None):
         self.message = message
         super().__init__(self.message)
 
@@ -125,11 +133,12 @@ class FIXA(FX_Model):
 
 class TraderDriver:
     def __init__(self):
-        options = webdriver.ChromeOptions()
-        # options.add_argument("--headless")
+        # options = webdriver.ChromeOptions()
+        options = uc.ChromeOptions()
         options.add_argument("--no-sandbox")
-        options.add_experimental_option(
-            'excludeSwitches', ['enable-logging', 'enable-automation'])
+        # options.add_experimental_option('excludeSwitches', ['enable-logging', 'enable-automation'])
+
+        options.headless = False
 
         # ユーザープロファイルの保管場所
         PROFILE_PATH: str = (
@@ -138,24 +147,23 @@ class TraderDriver:
         # プロファイルの名前
         PROFILE_DIR: str = "FIXAR"
 
-        options.add_argument(f"user-data-dir={PROFILE_PATH}")
-        options.add_argument(f"profile-directory={PROFILE_DIR}")
-        options.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
+        # options.add_argument(f"user-data-dir={PROFILE_PATH}")
+        # options.add_argument(f"profile-directory={PROFILE_DIR}")
+        # options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
 
         chrome_service = fs.Service(
             executable_path=ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=chrome_service, options=options)
+        # self.driver = webdriver.Chrome(service=chrome_service, options=options)
+        self.driver = uc.Chrome(service=chrome_service, options=options)
         self.wait = WebDriverWait(self.driver, 60)
         self.actions = ActionChains(self.driver)
 
         self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
                            'EURUSD': {'sell': 2, 'buy': 3}}
 
-        self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
-
     def login(self):
-        time.sleep(1)
+        self.driver.get('https://web.thinktrader.com/account/login')
+        time.sleep(3)
         try:
             if self.driver.find_element(By.ID, "email"):
                 self.driver.find_element(By.ID, "email").send_keys('a')
@@ -174,7 +182,7 @@ class TraderDriver:
                     if i.text == 'ログイン':
                         i.click()
 
-                iframe = fixar.driver.find_elements(By.TAG_NAME, "iframe")
+                iframe = self.driver.find_elements(By.TAG_NAME, "iframe")
                 for i in iframe:
                     if '<iframe src=' in i.get_attribute('outerHTML'):
                         iframe = i
@@ -349,6 +357,7 @@ class TraderDriver:
 
         except Exception as e:
             print('Error occured make_nariyuki_order \n{}'.format(e))
+            raise ToPageRefreshError(e)
 
     def settle_all_position(self):
         elements = self.driver.find_elements(
@@ -360,32 +369,36 @@ class TraderDriver:
         elements[1].click()
 
     def settle_position(self, symbol):
-        dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
-        dx_row = [i.text for i in dx_row]
+        try:
+            dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
+            dx_row = [i.text for i in dx_row]
 
-        bool_eurusd, bool_usdjpy = False, False
+            bool_eurusd, bool_usdjpy = False, False
 
-        for i in dx_row:
-            if 'EURUSD' in i:
-                bool_eurusd = True
-            if 'USDJPY' in i:
-                bool_usdjpy = True
+            for i in dx_row:
+                if 'EURUSD' in i:
+                    bool_eurusd = True
+                if 'USDJPY' in i:
+                    bool_usdjpy = True
 
-        if bool_usdjpy and bool_eurusd:
-            button_dic = {'EURUSD': 11,
-                          'USDJPY': 13}
+            if bool_usdjpy and bool_eurusd:
+                button_dic = {'EURUSD': 11,
+                              'USDJPY': 13}
 
-            posi = self.driver.find_elements(
-                By.CLASS_NAME, "PositionGrid_closeAndMoreOptionsCell__1EeeS")
-            posi[button_dic[symbol]].click()
-            time.sleep(1)
+                posi = self.driver.find_elements(
+                    By.CLASS_NAME, "PositionGrid_closeAndMoreOptionsCell__1EeeS")
+                posi[button_dic[symbol]].click()
+                time.sleep(1)
 
-            elements = self.driver.find_elements(
-                By.CLASS_NAME, "Button_buttonLabel__3kVe6")
-            elements[1].click()
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "Button_buttonLabel__3kVe6")
+                elements[1].click()
 
-        else:
-            self.settle_all_position()
+            else:
+                self.settle_all_position()
+
+        except StaleElementReferenceException as e:
+            raise ToPageRefreshError(e)
 
     def get_price(self):
         retry = 0
@@ -403,7 +416,7 @@ class TraderDriver:
                 for i in spans_usdjpy:
                     usdjpy += i.text
                 break
-            except StaleElementReferenceException:
+            except (StaleElementReferenceException, NoSuchElementException):
                 retry += 1
 
         retry = 0
@@ -420,7 +433,7 @@ class TraderDriver:
                 for i in spans_eurusd:
                     eurusd += i.text
                 break
-            except StaleElementReferenceException:
+            except (StaleElementReferenceException, NoSuchElementException):
                 retry += 1
 
         usdjpy = float(usdjpy)
@@ -598,8 +611,12 @@ class TraderDriver:
 
 class NTraderDriver(TraderDriver):
     def __init__(self, chrome_port=9222):
+        launch_chrome(chrome_port)
+
         options = webdriver.ChromeOptions()
         options.add_argument("--no-sandbox")
+        options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
         options.add_experimental_option(
             "debuggerAddress", "127.0.0.1:{}".format(chrome_port))
 
@@ -615,7 +632,7 @@ class NTraderDriver(TraderDriver):
         self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
 
 
-class FIXAR(NTraderDriver):
+class FIXAR(TraderDriver):
     def __init__(self, amount,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy):
@@ -721,49 +738,56 @@ class FIXAR_V2(FIXAR):
         return price_dic
 
     def run(self):
-        for i in range(2):
-            symbol = 'EURUSD' if i == 0 else 'USDJPY'
+        try:
+            recconect_button = self.driver.find_elements(
+                By.CLASS_NAME, 'ReconnectModal_button__1DjYD')
+        except WebDriverException as e:
+            raise ToDriverRefreshError(e)
 
-            position_bool = self.position_bool()
-            self.fixa[symbol].refresh_pricelist(self.ret_pricedic()[symbol])
+        if len(recconect_button) > 0:
+            raise ToPageRefreshError('recconect')
+        else:
+            for i in range(2):
+                symbol = 'EURUSD' if i == 0 else 'USDJPY'
 
-            if position_bool[i][0]:
-                get_price = position_bool[i][2]
-                now_price = position_bool[i][3]
-                position = position_bool[i][1]
-                price_differ = (now_price - get_price)*position
+                position_bool = self.position_bool()
+                self.fixa[symbol].refresh_pricelist(
+                    self.ret_pricedic()[symbol])
 
-                if price_differ > self.dynamic_rik[symbol] or \
-                        price_differ < -self.dynamic_son[symbol]:
-                    self.settle_position(symbol)
-                time.sleep(3)
+                if position_bool[i][0]:
+                    get_price = position_bool[i][2]
+                    now_price = position_bool[i][3]
+                    position = position_bool[i][1]
+                    price_differ = (now_price - get_price)*position
 
-            else:
-                if self.zero_spread():
-                    rate = self.ret_pricedic()[symbol]
-                    pred = self.fixa[symbol].ret_prediction()
-
-                    side = 'buy' if pred else 'sell'
-                    sashine = rate + \
-                        (self.fixa[symbol].sahine)*(1 if pred else -1)
-                    gyaku_sashine = rate - \
-                        (self.fixa[symbol].gyakusashine)*(1 if pred else -1)
-
-                    self.make_nariyuki_order(symbol, side,
-                                             self.amount,
-                                             sashine, gyaku_sashine)
+                    if price_differ > self.dynamic_rik[symbol] or \
+                            price_differ < -self.dynamic_son[symbol]:
+                        self.settle_position(symbol)
                     time.sleep(3)
+
+                else:
+                    if self.zero_spread():
+                        rate = self.ret_pricedic()[symbol]
+                        pred = self.fixa[symbol].ret_prediction()
+
+                        side = 'buy' if pred else 'sell'
+                        sashine = rate + \
+                            (self.fixa[symbol].sahine)*(1 if pred else -1)
+                        gyaku_sashine = rate - \
+                            (self.fixa[symbol].gyakusashine) * \
+                            (1 if pred else -1)
+
+                        self.make_nariyuki_order(symbol, side,
+                                                 self.amount,
+                                                 sashine, gyaku_sashine)
+                        time.sleep(3)
 
 
 # %%
-chrome_port = 9222
-subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-                '-remote-debugging-port={}'.format(chrome_port),
-                '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
 amount = 1000
 
-sashine_eurusd, gyaku_sashine_eurusd = 0.06/100, 0.1/100
-sashine_usdjpy, gyaku_sashine_usdjpy = 0.06, 0.1
+sashine_eurusd, gyaku_sashine_eurusd = round(0.06/150, 5), round(0.12/150, 5)
+sashine_usdjpy, gyaku_sashine_usdjpy = 0.06, 0.12
 
 dynamic_rik = {'EURUSD': 0.005/100, 'USDJPY': 0.005}
 dynamic_son = {'EURUSD': round(0.1/150, 5), 'USDJPY': 0.1}
@@ -774,6 +798,8 @@ fixar = FIXAR_V2(amount,
                  dynamic_rik, dynamic_son)
 # %%
 # nt = NTraderDriver()
+# %%
+# nt.login()
 # %%
 # nt.select_symbol_position('USDJPY', 'buy')
 # %%
@@ -816,14 +842,14 @@ while True:
 
     count += 1
     print('{}\n{}\n__________\n'.format(count, datetime.now()))
-    if count % 5 == 0:
-        fixar.driver.refresh()
+    # if count % 30 == 0:
+    #    fixar.login()
+
+    # elif count % 5 == 0:
+    #    fixar.driver.refresh()
 
     sleep_time = 60 - (time.time() - t)
     sleep_time = sleep_time if sleep_time > 0 else 0
     time.sleep(sleep_time)
 
 # %%
-round(0.1/150, 5)
-# %%
-round(0.005/150, 5)
