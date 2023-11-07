@@ -4,6 +4,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome import service as fs
 from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium import webdriver
 
 from modules import models, modules
@@ -56,10 +57,12 @@ class TraderDriver:
         # プロファイルの名前
         PROFILE_DIR: str = "Default"
 
-        options.add_argument(f"user-data-dir={PROFILE_PATH}")
-        options.add_argument(f"profile-directory={PROFILE_DIR}")
+        # options.add_argument(f"user-data-dir={PROFILE_PATH}")
+        # options.add_argument(f"profile-directory={PROFILE_DIR}")
 
-        chrome_service = fs.Service(executable_path='datas/chromedriver.exe')
+        # chrome_service = fs.Service(executable_path='datas/chromedriver.exe')
+        chrome_service = fs.Service(
+            executable_path=ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=chrome_service, options=options)
         self.wait = WebDriverWait(self.driver, 60)
         self.actions = ActionChains(self.driver)
@@ -250,8 +253,8 @@ if __name__ == '__main__':
 
             print('USD/JPY-{} position: {}'.format(fixar.fixa_usdjpy.price_list[-1],
                                                    fixar.fixa_usdjpy.position))
-            print('EUR/USD-{} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
-                                                   fixar.fixa_eurusd.position))
+            # print('EUR/USD-{} position: {}'.format(fixar.fixa_eurusd.price_list[-1],
+            #                                       fixar.fixa_eurusd.position))
             print('==============================\n')
 
             error_count = 0
@@ -263,4 +266,6 @@ if __name__ == '__main__':
         sleep_time = 60 - (time.time() - t)
         time.sleep(sleep_time)
 
+# %%
+fixar = FIXAR()
 # %%
