@@ -810,10 +810,12 @@ except HumanChallengeError as e:
 time.sleep(30)
 # %%
 count = 0
-while True:
+error_count = 0
+while error_count < 3:
     t = time.time()
     try:
         fixar.run()
+        error_count = 0
 
     except ToPageRefreshError as e:
         print(e)
@@ -833,23 +835,24 @@ while True:
         except HumanChallengeError as e:
             print(e)
             line.send_to_masaumi('human challenge needed \n{}'.format(e))
-            break
 
     except Exception as e:
         print(e)
+        fixar.driver_refresh()
         line.send_to_masaumi('fatal error occuered \n{}'.format(e))
-        break
+        error_count += 1
 
     count += 1
     print('{}\n{}\n__________\n'.format(count, datetime.now()))
     # if count % 30 == 0:
     #    fixar.login()
 
-    # elif count % 5 == 0:
-    #    fixar.driver.refresh()
+    if count % 10 == 0:
+        fixar.driver.refresh()
 
     sleep_time = 60 - (time.time() - t)
     sleep_time = sleep_time if sleep_time > 0 else 0
     time.sleep(sleep_time)
 
+line.send_to_masaumi('FIXAR stopped')
 # %%
