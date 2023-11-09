@@ -227,61 +227,6 @@ class TraderDriver:
         except Exception as e:
             print('Error occured make_order \n{}'.format(e))
 
-    def make_sashine_order(self, symbol, position, amount,
-                           rate, sashine, gyaku_sashine):
-        try:
-            self.select_symbol_position(symbol, position)
-            time.sleep(1)
-
-            tradeticket_container = self.driver.find_element(
-                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-            ticket_dropdown = tradeticket_container.find_element(
-                By.CLASS_NAME, 'TradeTicket_dropdownMenu__3Zdn-')
-            ticket_dropdown.click()
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'item')[1].click()
-
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'checkbox')[0].click()
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'checkbox')[1].click()
-
-            tradeticket_container = self.driver.find_element(
-                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-
-            input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
-
-            rate_inp = input_[2]
-            amount_inp = input_[3]
-            sashine_inp = input_[5]
-            gyaku_sashine_inp = input_[7]
-
-            rate_inp.clear()
-            rate_inp.send_keys(rate)
-
-            amount_inp.clear()
-            amount_inp.send_keys(amount)
-
-            sashine_inp.clear()
-            sashine_inp.send_keys(sashine)
-
-            gyaku_sashine_inp.clear()
-            gyaku_sashine_inp.send_keys(gyaku_sashine)
-
-            for _ in range(2):
-                elements = self.driver.find_elements(
-                    By.CLASS_NAME, "Button_button__CftuL")
-                elements[1].click()
-                time.sleep(1)
-
-        except ElementClickInterceptedException as e:
-            print('Error occured make_nariyuki_order \n{}'.format(e))
-            raise ToPageRefreshError(e)
-
-        except Exception as e:
-            print('Error occured make_sashine_order \n{}'.format(e))
-
     def make_nariyuki_order(self, symbol, position, amount,
                             sashine, gyaku_sashine):
         try:
