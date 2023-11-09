@@ -1,8 +1,10 @@
 # %%
 import subprocess
 import pandas as pd
-from selenium.common.exceptions import StaleElementReferenceException, WebDriverException, NoSuchElementException, \
-    ElementClickInterceptedException, NoSuchWindowException, InvalidSessionIdException
+from selenium.common.exceptions import StaleElementReferenceException, \
+    WebDriverException, NoSuchElementException, \
+    ElementClickInterceptedException, NoSuchWindowException, \
+    InvalidSessionIdException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -19,6 +21,8 @@ from datetime import datetime
 import numpy as np
 import random
 import time
+import pickle
+from glob import glob
 
 
 def ret_inpdata(hist):
@@ -145,7 +149,7 @@ class TraderDriver:
             "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data"
         )
         # プロファイルの名前
-        PROFILE_DIR: str = "FIXAR"
+        PROFILE_DIR: str = "FIXAR2"
 
         # options.add_argument(f"user-data-dir={PROFILE_PATH}")
         # options.add_argument(f"profile-directory={PROFILE_DIR}")
@@ -162,8 +166,9 @@ class TraderDriver:
                            'EURUSD': {'sell': 2, 'buy': 3}}
 
     def login(self):
-        self.driver.get('https://web.thinktrader.com/account/login')
-        time.sleep(3)
+        if not self.driver.current_url == 'https://web.thinktrader.com/account/login':
+            self.driver.get('https://web.thinktrader.com/account/login')
+            time.sleep(3)
         try:
             if self.driver.find_element(By.ID, "email"):
                 self.driver.find_element(By.ID, "email").send_keys('a')
@@ -355,9 +360,9 @@ class TraderDriver:
             print('Error occured make_nariyuki_order \n{}'.format(e))
             raise ToPageRefreshError(e)
 
-        except Exception as e:
+        except (Exception, NoSuchElementException) as e:
             print('Error occured make_nariyuki_order \n{}'.format(e))
-            raise ToPageRefreshError(e)
+            raise ToDriverRefreshError(e)
 
     def settle_all_position(self):
         elements = self.driver.find_elements(
@@ -718,6 +723,8 @@ class FIXAR(TraderDriver):
 
         super().__init__()
 
+        time.sleep(10)
+
 
 class FIXAR_V2(FIXAR):
     def __init__(self, amount,
@@ -737,7 +744,7 @@ class FIXAR_V2(FIXAR):
 
         return price_dic
 
-    def run(self):
+    def run(self, hist_dic=None):
         try:
             recconect_button = self.driver.find_elements(
                 By.CLASS_NAME, 'ReconnectModal_button__1DjYD')
@@ -751,8 +758,8 @@ class FIXAR_V2(FIXAR):
                 symbol = 'EURUSD' if i == 0 else 'USDJPY'
 
                 position_bool = self.position_bool()
-                self.fixa[symbol].refresh_pricelist(
-                    self.ret_pricedic()[symbol])
+                rate = self.ret_pricedic()[symbol]
+                self.fixa[symbol].refresh_pricelist(rate)
 
                 if position_bool[i][0]:
                     get_price = position_bool[i][2]
@@ -782,6 +789,11 @@ class FIXAR_V2(FIXAR):
                                                  sashine, gyaku_sashine)
                         time.sleep(3)
 
+                if hist_dic is not None:
+                    hist_dic[symbol].append(self.fixa[symbol].price_list[-1])
+
+        return hist_dic
+
 
 # %%
 amount = 1000
@@ -797,11 +809,9 @@ fixar = FIXAR_V2(amount,
                  sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son)
 # %%
-# nt = NTraderDriver()
+fixar.driver.get('https://web.thinktrader.com/account/login')
 # %%
-# nt.login()
-# %%
-# nt.select_symbol_position('USDJPY', 'buy')
+fixar.driver.current_url == 'https://web.thinktrader.com/account/login'
 # %%
 try:
     fixar.login()
@@ -809,46 +819,27 @@ except HumanChallengeError as e:
     print(e)
 time.sleep(30)
 # %%
+num_hist = str(len(glob('hist_data/*'))).zfill(3)
+hist_dic = {'EURUSD': [], 'USDJPY': []}
+
 count = 0
 error_count = 0
 while error_count < 3:
     t = time.time()
-    try:
-        fixar.run()
-        error_count = 0
+    hist_dic = fixar.run(hist_dic=hist_dic)
 
-    except ToPageRefreshError as e:
-        print(e)
+    print('{}\n{}\n__________\n'.format(count, datetime.now()))
+
+    if count % 5 == 0:
         fixar.driver.refresh()
-        try:
-            fixar.login()
-        except HumanChallengeError as e:
-            print(e)
-            line.send_to_masaumi('human challenge needed \n{}'.format(e))
-            break
 
-    except ToDriverRefreshError as e:
-        print(e)
-        fixar.driver_refresh()
-        try:
-            fixar.login()
-        except HumanChallengeError as e:
-            print(e)
-            line.send_to_masaumi('human challenge needed \n{}'.format(e))
+    with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
+        pickle.dump(hist_dic, f)
 
-    except Exception as e:
-        print(e)
-        fixar.driver_refresh()
-        line.send_to_masaumi('fatal error occuered \n{}'.format(e))
-        error_count += 1
+    if fixar.driver.current_url == 'https://web.thinktrader.com/account/login':
+        fixar.login()
 
     count += 1
-    print('{}\n{}\n__________\n'.format(count, datetime.now()))
-    # if count % 30 == 0:
-    #    fixar.login()
-
-    if count % 10 == 0:
-        fixar.driver.refresh()
 
     sleep_time = 60 - (time.time() - t)
     sleep_time = sleep_time if sleep_time > 0 else 0
