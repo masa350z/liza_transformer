@@ -227,27 +227,6 @@ class TraderDriver:
         except Exception as e:
             print('Error occured make_order \n{}'.format(e))
 
-    def make_oneclick_order(self, symbol, position):
-        try:
-            order_buttons = self.driver.find_elements(
-                By.CLASS_NAME,
-                'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
-            sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
-
-            order_buttons = {'EURUSD': [buy_eurusd, sell_eurusd],
-                             'USDJPY': [buy_usdjpy, sell_usdjpy]}
-
-            buy_sell = 0 if position == 'buy' else 1
-
-            order_buttons[symbol][buy_sell].click()
-
-        except ElementClickInterceptedException as e:
-            print('Error occured make_nariyuki_order \n{}'.format(e))
-            raise ToPageRefreshError(e)
-
-        except Exception as e:
-            print('Error occured make_oneclick_order \n{}'.format(e))
-
     def make_sashine_order(self, symbol, position, amount,
                            rate, sashine, gyaku_sashine):
         try:
@@ -440,29 +419,6 @@ class TraderDriver:
                 break
             except (StaleElementReferenceException,
                     NoSuchElementException):
-                retry += 1
-
-        usdjpy = float(usdjpy)
-        eurusd = float(eurusd)
-
-        return usdjpy, eurusd
-
-    def get_price_oneclick(self):
-        retry = 0
-        usdjpy, eurusd = 0, 0
-        while retry < 3:
-            try:
-                order_buttons = self.driver.find_elements(
-                    By.CLASS_NAME,
-                    'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
-
-                sell_usdjpy, buy_usdjpy, \
-                    sell_eurusd, buy_eurusd = order_buttons
-
-                usdjpy = float(buy_usdjpy.text.split('\n')[1])
-                eurusd = float(buy_eurusd.text.split('\n')[1])
-                break
-            except StaleElementReferenceException:
                 retry += 1
 
         usdjpy = float(usdjpy)
