@@ -312,6 +312,7 @@ class TraderDriver:
                 try:
                     tradeticket_container = self.driver.find_element(
                         By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+                    error_count == 100
                 except NoSuchElementException:
                     error_count += 1
                     self.select_symbol_position(symbol, position)

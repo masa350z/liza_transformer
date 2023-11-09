@@ -82,7 +82,7 @@ def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
 # %%
 y_mode = 'binary'
 
-symbol = 'EURUSD'
+symbol = 'USDJPY'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
