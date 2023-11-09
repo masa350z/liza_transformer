@@ -202,33 +202,8 @@ class TraderDriver:
             except StaleElementReferenceException:
                 continue
 
-    def make_order(self, symbol, position, amount):
-        try:
-            self.select_symbol_position(symbol, position)
-
-            amount_box = self.driver.find_element(
-                By.CLASS_NAME, 'FormattedNumberInput_input__3uB6c')
-            amount_box.clear()
-            amount_box.send_keys(str(amount))
-
-            elements = self.driver.find_elements(
-                By.CLASS_NAME, "Button_button__CftuL")
-            elements[1].click()
-            time.sleep(1)
-
-            elements = self.driver.find_elements(
-                By.CLASS_NAME, "Button_button__CftuL")
-            elements[1].click()
-
-        except ElementClickInterceptedException as e:
-            print('Error occured make_nariyuki_order \n{}'.format(e))
-            raise ToPageRefreshError(e)
-
-        except Exception as e:
-            print('Error occured make_order \n{}'.format(e))
-
-    def make_nariyuki_order(self, symbol, position, amount,
-                            sashine, gyaku_sashine):
+    def make_order(self, symbol, position, amount,
+                   sashine, gyaku_sashine):
         try:
             self.select_symbol_position(symbol, position)
             time.sleep(1)
@@ -508,9 +483,9 @@ class FIXAR(TraderDriver):
                                 (self.fixa[symbol].gyakusashine) * \
                                 (1 if pred else -1)
 
-                            self.make_nariyuki_order(symbol, side,
-                                                     self.amount,
-                                                     sashine, gyaku_sashine)
+                            self.make_order(symbol, side,
+                                            self.amount,
+                                            sashine, gyaku_sashine)
                             time.sleep(3)
 
                     if hist_dic is not None:
