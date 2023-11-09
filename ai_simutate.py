@@ -26,7 +26,7 @@ def simulate(hist_data, rik, son,
                 profit_list.append(profit)
                 get_price = 0
 
-        if get_price == 0 and std_lis[h] < std_v:
+        elif get_price == 0 and std_lis[h] < std_v:
             get_price = i
             if pred is None:
                 up_ = np.random.random() > 0.5
@@ -67,7 +67,7 @@ def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
             #    profit_list.append(profit/get_price)
             #    get_price = 0
 
-        if get_price == 0:
+        elif get_price == 0:
             get_price = i
             up_ = pred[h] > 0.5
 
@@ -82,7 +82,7 @@ def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
 # %%
 y_mode = 'binary'
 
-symbol = 'USDJPY'
+symbol = 'EURUSD'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
@@ -109,22 +109,8 @@ pred = pred[:, 0]
 hist_data = data_x[:, -1, 0]
 hist_data = hist_data[::base_m]
 # %%
-std_ = np.prod(np.std(data_x, axis=2), axis=1)
-
-std_ave = np.average(std_)
-std_std = np.std(std_)
-# %%
-rik = 0.005/100
-son = 0.008/100
-
-kane, asset, profit_list = simulate(hist_data, rik, son,
-                                    pred=pred)
-kane
-# %%
-asset[-1] - asset[int(len(asset)*0.8)]
-# %%
-rik = 0.003/100
-son = 0.005/100
+rik = 0.008/100
+son = 0.015/100
 
 kane, asset, profit_list = simulate_2(hist_data, pr_k, rik, son, pred)
 kane
@@ -142,3 +128,4 @@ lose_std = np.std(profit_list[profit_list < 0])
 # %%
 win_ave, lose_ave, win_std, lose_std
 # %%
+pd.DataFrame(asset).plot()
