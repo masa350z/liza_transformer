@@ -175,8 +175,8 @@ class TraderDriver:
                         iframe = i
                         break
                 time.sleep(1)
-                if 'relative; width:' in iframe.get_attribute('outerHTML'):
-                    raise HumanChallengeError()
+                # if 'relative; width:' in iframe.get_attribute('outerHTML'):
+                #    raise HumanChallengeError()
             else:
                 pass
 
@@ -307,43 +307,55 @@ class TraderDriver:
             self.select_symbol_position(symbol, position)
             time.sleep(1)
 
-            tradeticket_container = self.driver.find_element(
-                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+            error_count = 0
+            while error_count < 3:
+                try:
+                    tradeticket_container = self.driver.find_element(
+                        By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+                except NoSuchElementException:
+                    error_count += 1
+                    self.select_symbol_position(symbol, position)
+                    time.sleep(1)
+                    continue
 
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'checkbox')[0].click()
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'checkbox')[1].click()
+            if error_count == 3:
+                raise ToDriverRefreshError()
+            else:
+                tradeticket_container.find_elements(
+                    By.CLASS_NAME, 'checkbox')[0].click()
+                tradeticket_container.find_elements(
+                    By.CLASS_NAME, 'checkbox')[1].click()
 
-            tradeticket_container = self.driver.find_element(
-                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+                tradeticket_container = self.driver.find_element(
+                    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-            input_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+                input_ = tradeticket_container.find_elements(
+                    By.TAG_NAME, 'input')
 
-            amount_inp = input_[2]
-            sashine_inp = input_[4]
-            gyaku_sashine_inp = input_[6]
+                amount_inp = input_[2]
+                sashine_inp = input_[4]
+                gyaku_sashine_inp = input_[6]
 
-            amount_inp.clear()
-            amount_inp.send_keys(amount)
+                amount_inp.clear()
+                amount_inp.send_keys(amount)
 
-            sashine_inp.clear()
-            sashine_inp.send_keys(sashine)
+                sashine_inp.clear()
+                sashine_inp.send_keys(sashine)
 
-            gyaku_sashine_inp.clear()
-            gyaku_sashine_inp.send_keys(gyaku_sashine)
+                gyaku_sashine_inp.clear()
+                gyaku_sashine_inp.send_keys(gyaku_sashine)
 
-            for _ in range(2):
-                elements = self.driver.find_elements(
-                    By.CLASS_NAME, "Button_button__CftuL")
-                elements[1].click()
-                time.sleep(1)
+                for _ in range(2):
+                    elements = self.driver.find_elements(
+                        By.CLASS_NAME, "Button_button__CftuL")
+                    elements[1].click()
+                    time.sleep(1)
 
         except ElementClickInterceptedException as e:
             print('Error occured make_nariyuki_order \n{}'.format(e))
             raise ToPageRefreshError(e)
 
-        except (Exception, NoSuchElementException) as e:
+        except Exception as e:
             print('Error occured make_nariyuki_order \n{}'.format(e))
             raise ToDriverRefreshError(e)
 
@@ -390,49 +402,45 @@ class TraderDriver:
             raise ToPageRefreshError(e)
 
     def get_price(self):
-        if self.driver.current_url\
-                == 'https://web.thinktrader.com/account/login':
-            self.login()
-        else:
-            retry = 0
-            usdjpy, eurusd = 0, 0
-            while retry < 3:
+        retry = 0
+        usdjpy, eurusd = 0, 0
+        while retry < 3:
+            try:
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
                 try:
-                    elements = self.driver.find_elements(
-                        By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
-                    try:
-                        spans_usdjpy = elements[0].find_elements(
-                            By.TAG_NAME, "span")
-                    except IndexError as e:
-                        raise ToPageRefreshError(e)
-                    usdjpy = ''
-                    for i in spans_usdjpy:
-                        usdjpy += i.text
-                    break
-                except (StaleElementReferenceException,
-                        NoSuchElementException):
-                    retry += 1
+                    spans_usdjpy = elements[0].find_elements(
+                        By.TAG_NAME, "span")
+                except IndexError as e:
+                    raise ToPageRefreshError(e)
+                usdjpy = ''
+                for i in spans_usdjpy:
+                    usdjpy += i.text
+                break
+            except (StaleElementReferenceException,
+                    NoSuchElementException):
+                retry += 1
 
-            retry = 0
-            while retry < 3:
+        retry = 0
+        while retry < 3:
+            try:
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
                 try:
-                    elements = self.driver.find_elements(
-                        By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
-                    try:
-                        spans_eurusd = elements[2].find_elements(
-                            By.TAG_NAME, "span")
-                    except IndexError as e:
-                        raise ToPageRefreshError(e)
-                    eurusd = ''
-                    for i in spans_eurusd:
-                        eurusd += i.text
-                    break
-                except (StaleElementReferenceException,
-                        NoSuchElementException):
-                    retry += 1
+                    spans_eurusd = elements[2].find_elements(
+                        By.TAG_NAME, "span")
+                except IndexError as e:
+                    raise ToPageRefreshError(e)
+                eurusd = ''
+                for i in spans_eurusd:
+                    eurusd += i.text
+                break
+            except (StaleElementReferenceException,
+                    NoSuchElementException):
+                retry += 1
 
-            usdjpy = float(usdjpy)
-            eurusd = float(eurusd)
+        usdjpy = float(usdjpy)
+        eurusd = float(eurusd)
 
         return usdjpy, eurusd
 
@@ -516,6 +524,10 @@ class TraderDriver:
                     get_price_eurusd, now_price_eurusd], \
                 [bool_usdjpy, position_usdjpy,
                  get_price_usdjpy, now_price_usdjpy]
+
+        except StaleElementReferenceException as e:
+            print('Error Occured position_bool \n{}'.format(e))
+            raise ToPageRefreshError(e)
 
         except WebDriverException as e:
             print('Error Occured position_bool \n{}'.format(e))
@@ -730,43 +742,48 @@ class FIXAR_V2(FIXAR):
         if len(recconect_button) > 0:
             raise ToPageRefreshError('recconect')
         else:
-            for i in range(2):
-                symbol = 'EURUSD' if i == 0 else 'USDJPY'
+            if self.driver.current_url\
+                    == 'https://web.thinktrader.com/account/login':
+                self.login()
+            else:
+                for i in range(2):
+                    symbol = 'EURUSD' if i == 0 else 'USDJPY'
 
-                position_bool = self.position_bool()
-                rate = self.ret_pricedic()[symbol]
-                self.fixa[symbol].refresh_pricelist(rate)
+                    position_bool = self.position_bool()
+                    rate = self.ret_pricedic()[symbol]
+                    self.fixa[symbol].refresh_pricelist(rate)
 
-                if position_bool[i][0]:
-                    get_price = position_bool[i][2]
-                    now_price = position_bool[i][3]
-                    position = position_bool[i][1]
-                    price_differ = (now_price - get_price)*position
+                    if position_bool[i][0]:
+                        get_price = position_bool[i][2]
+                        now_price = position_bool[i][3]
+                        position = position_bool[i][1]
+                        price_differ = (now_price - get_price)*position
 
-                    if price_differ > self.dynamic_rik[symbol] or \
-                            price_differ < -self.dynamic_son[symbol]:
-                        self.settle_position(symbol)
-                    time.sleep(3)
-
-                else:
-                    if self.zero_spread():
-                        rate = self.ret_pricedic()[symbol]
-                        pred = self.fixa[symbol].ret_prediction()
-
-                        side = 'buy' if pred else 'sell'
-                        sashine = rate + \
-                            (self.fixa[symbol].sahine)*(1 if pred else -1)
-                        gyaku_sashine = rate - \
-                            (self.fixa[symbol].gyakusashine) * \
-                            (1 if pred else -1)
-
-                        self.make_nariyuki_order(symbol, side,
-                                                 self.amount,
-                                                 sashine, gyaku_sashine)
+                        if price_differ > self.dynamic_rik[symbol] or \
+                                price_differ < -self.dynamic_son[symbol]:
+                            self.settle_position(symbol)
                         time.sleep(3)
 
-                if hist_dic is not None:
-                    hist_dic[symbol].append(self.fixa[symbol].price_list[-1])
+                    else:
+                        if self.zero_spread():
+                            rate = self.ret_pricedic()[symbol]
+                            pred = self.fixa[symbol].ret_prediction()
+
+                            side = 'buy' if pred else 'sell'
+                            sashine = rate + \
+                                (self.fixa[symbol].sahine)*(1 if pred else -1)
+                            gyaku_sashine = rate - \
+                                (self.fixa[symbol].gyakusashine) * \
+                                (1 if pred else -1)
+
+                            self.make_nariyuki_order(symbol, side,
+                                                     self.amount,
+                                                     sashine, gyaku_sashine)
+                            time.sleep(3)
+
+                    if hist_dic is not None:
+                        hist_dic[symbol].append(
+                            self.fixa[symbol].price_list[-1])
 
         return hist_dic
 
@@ -775,7 +792,7 @@ class FIXAR_V2(FIXAR):
 amount = 1000
 
 sashine_eurusd, gyaku_sashine_eurusd = round(0.06/150, 5), round(0.12/150, 5)
-sashine_usdjpy, gyaku_sashine_usdjpy = 0.06, 0.12
+sashine_usdjpy, gyaku_sashine_usdjpy = round(0.06, 3), round(0.12, 3)
 
 dynamic_rik = {'EURUSD': 0.005/100, 'USDJPY': 0.005}
 dynamic_son = {'EURUSD': round(0.1/150, 5), 'USDJPY': 0.1}
@@ -786,10 +803,6 @@ fixar = FIXAR_V2(amount, k, pr_k,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son)
-# %%
-fixar.driver.get('https://web.thinktrader.com/account/login')
-# %%
-fixar.driver.current_url == 'https://web.thinktrader.com/account/login'
 # %%
 try:
     fixar.login()
@@ -825,3 +838,6 @@ while error_count < 3:
 
 line.send_to_masaumi('FIXAR stopped')
 # %%
+fixar.driver.find_element(By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+# %%
+fixar.select_symbol_position('EURUSD', 'sell')

@@ -54,18 +54,18 @@ def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
         if get_price != 0:
             if (i - get_price)*position > rik*get_price:
                 kane += profit
-                profit_list.append(profit)
+                profit_list.append(profit/get_price)
                 get_price = 0
 
             elif (i - get_price)*position < -son*get_price:
                 kane += profit
-                profit_list.append(profit)
+                profit_list.append(profit/get_price)
                 get_price = 0
 
-            elif position_count == 0:
-                kane += profit
-                profit_list.append(profit)
-                get_price = 0
+            # elif position_count == 0:
+            #    kane += profit
+            #    profit_list.append(profit/get_price)
+            #    get_price = 0
 
         if get_price == 0:
             get_price = i
@@ -82,7 +82,7 @@ def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
 # %%
 y_mode = 'binary'
 
-symbol = 'USDJPY'
+symbol = 'EURUSD'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
@@ -114,12 +114,8 @@ std_ = np.prod(np.std(data_x, axis=2), axis=1)
 std_ave = np.average(std_)
 std_std = np.std(std_)
 # %%
-std_ave, std_std
-# %%
-data_x.shape
-# %%
-rik = 0.005
-son = 0.008
+rik = 0.005/100
+son = 0.008/100
 
 kane, asset, profit_list = simulate(hist_data, rik, son,
                                     pred=pred)
