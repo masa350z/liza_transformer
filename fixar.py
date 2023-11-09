@@ -1,5 +1,4 @@
 # %%
-import subprocess
 import pandas as pd
 from selenium.common.exceptions import StaleElementReferenceException, \
     WebDriverException, NoSuchElementException, \
@@ -10,7 +9,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome import service as fs
 from selenium.webdriver.common.by import By
-from selenium import webdriver
 
 import undetected_chromedriver as uc
 
@@ -25,21 +23,15 @@ import pickle
 from glob import glob
 
 
-def ret_inpdata(hist):
-    data_x01 = hist[-3:]
-    data_x02 = hist[::-1][::2][::-1][-3:]
-    data_x03 = hist[::-1][::3][::-1][-3:]
+def ret_inpdata(hist, k):
+    data_x01 = hist[-k:]
+    data_x02 = hist[::-1][::2][::-1][-k:]
+    data_x03 = hist[::-1][::3][::-1][-k:]
 
     inp_data = np.stack([data_x01, data_x02, data_x03]).T
     inp_data = np.expand_dims(inp_data, 0)
 
     return inp_data
-
-
-def launch_chrome(chrome_port):
-    subprocess.run(["C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-                    '-remote-debugging-port={}'.format(chrome_port),
-                    '--user-data-dir=C:\\Users\\ai-so\\local_program\\liza_transformer\\fixar_data'])
 
 
 class ToPageRefreshError(Exception):
@@ -79,8 +71,9 @@ class FX_Model:
 
 
 class FIXA(FX_Model):
-    def __init__(self, symbol, sashine, gyakusashine):
-        super().__init__(symbol, 1, 3, 3)
+    def __init__(self, symbol, sashine, gyakusashine,
+                 k, pr_k):
+        super().__init__(symbol, 1, k, pr_k)
         self.count = 0
         self.position = 0
         self.get_price = 0
@@ -96,7 +89,7 @@ class FIXA(FX_Model):
         if len(self.price_list) < 9:
             up_ = random.random() > 0.5
         else:
-            inp_data = ret_inpdata(self.price_list)
+            inp_data = ret_inpdata(self.price_list, k)
             up_ = self.make_prediction(inp_data)
 
         return up_
@@ -137,27 +130,14 @@ class FIXA(FX_Model):
 
 class TraderDriver:
     def __init__(self):
-        # options = webdriver.ChromeOptions()
         options = uc.ChromeOptions()
         options.add_argument("--no-sandbox")
-        # options.add_experimental_option('excludeSwitches', ['enable-logging', 'enable-automation'])
 
         options.headless = False
 
-        # ユーザープロファイルの保管場所
-        PROFILE_PATH: str = (
-            "C:\\Users\\User\\AppData\\Local\\Google\\Chrome\\User Data"
-        )
-        # プロファイルの名前
-        PROFILE_DIR: str = "FIXAR2"
-
-        # options.add_argument(f"user-data-dir={PROFILE_PATH}")
-        # options.add_argument(f"profile-directory={PROFILE_DIR}")
-        # options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
-
         chrome_service = fs.Service(
             executable_path=ChromeDriverManager().install())
-        # self.driver = webdriver.Chrome(service=chrome_service, options=options)
+
         self.driver = uc.Chrome(service=chrome_service, options=options)
         self.wait = WebDriverWait(self.driver, 60)
         self.actions = ActionChains(self.driver)
@@ -166,7 +146,9 @@ class TraderDriver:
                            'EURUSD': {'sell': 2, 'buy': 3}}
 
     def login(self):
-        if not self.driver.current_url == 'https://web.thinktrader.com/account/login':
+        if not self.driver.current_url\
+                == 'https://web.thinktrader.com/account/login':
+
             self.driver.get('https://web.thinktrader.com/account/login')
             time.sleep(3)
         try:
@@ -246,7 +228,8 @@ class TraderDriver:
     def make_oneclick_order(self, symbol, position):
         try:
             order_buttons = self.driver.find_elements(
-                By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+                By.CLASS_NAME,
+                'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
             sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
 
             order_buttons = {'EURUSD': [buy_eurusd, sell_eurusd],
@@ -391,7 +374,8 @@ class TraderDriver:
                               'USDJPY': 13}
 
                 posi = self.driver.find_elements(
-                    By.CLASS_NAME, "PositionGrid_closeAndMoreOptionsCell__1EeeS")
+                    By.CLASS_NAME,
+                    "PositionGrid_closeAndMoreOptionsCell__1EeeS")
                 posi[button_dic[symbol]].click()
                 time.sleep(1)
 
@@ -406,43 +390,49 @@ class TraderDriver:
             raise ToPageRefreshError(e)
 
     def get_price(self):
-        retry = 0
-        usdjpy, eurusd = 0, 0
-        while retry < 3:
-            try:
-                elements = self.driver.find_elements(
-                    By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
+        if self.driver.current_url\
+                == 'https://web.thinktrader.com/account/login':
+            self.login()
+        else:
+            retry = 0
+            usdjpy, eurusd = 0, 0
+            while retry < 3:
                 try:
-                    spans_usdjpy = elements[0].find_elements(
-                        By.TAG_NAME, "span")
-                except IndexError as e:
-                    raise ToPageRefreshError(e)
-                usdjpy = ''
-                for i in spans_usdjpy:
-                    usdjpy += i.text
-                break
-            except (StaleElementReferenceException, NoSuchElementException):
-                retry += 1
+                    elements = self.driver.find_elements(
+                        By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
+                    try:
+                        spans_usdjpy = elements[0].find_elements(
+                            By.TAG_NAME, "span")
+                    except IndexError as e:
+                        raise ToPageRefreshError(e)
+                    usdjpy = ''
+                    for i in spans_usdjpy:
+                        usdjpy += i.text
+                    break
+                except (StaleElementReferenceException,
+                        NoSuchElementException):
+                    retry += 1
 
-        retry = 0
-        while retry < 3:
-            try:
-                elements = self.driver.find_elements(
-                    By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
+            retry = 0
+            while retry < 3:
                 try:
-                    spans_eurusd = elements[2].find_elements(
-                        By.TAG_NAME, "span")
-                except IndexError as e:
-                    raise ToPageRefreshError(e)
-                eurusd = ''
-                for i in spans_eurusd:
-                    eurusd += i.text
-                break
-            except (StaleElementReferenceException, NoSuchElementException):
-                retry += 1
+                    elements = self.driver.find_elements(
+                        By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
+                    try:
+                        spans_eurusd = elements[2].find_elements(
+                            By.TAG_NAME, "span")
+                    except IndexError as e:
+                        raise ToPageRefreshError(e)
+                    eurusd = ''
+                    for i in spans_eurusd:
+                        eurusd += i.text
+                    break
+                except (StaleElementReferenceException,
+                        NoSuchElementException):
+                    retry += 1
 
-        usdjpy = float(usdjpy)
-        eurusd = float(eurusd)
+            usdjpy = float(usdjpy)
+            eurusd = float(eurusd)
 
         return usdjpy, eurusd
 
@@ -452,9 +442,11 @@ class TraderDriver:
         while retry < 3:
             try:
                 order_buttons = self.driver.find_elements(
-                    By.CLASS_NAME, 'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
+                    By.CLASS_NAME,
+                    'OneClickTradeButtons_tradeButtonContainer__3Z-Xe')
 
-                sell_usdjpy, buy_usdjpy, sell_eurusd, buy_eurusd = order_buttons
+                sell_usdjpy, buy_usdjpy, \
+                    sell_eurusd, buy_eurusd = order_buttons
 
                 usdjpy = float(buy_usdjpy.text.split('\n')[1])
                 eurusd = float(buy_eurusd.text.split('\n')[1])
@@ -520,8 +512,11 @@ class TraderDriver:
                 position_usdjpy = dx_row[2].split('\n')[0]
                 position_usdjpy = 1 if position_usdjpy == '買い' else -1
 
-            return [bool_eurusd, position_eurusd, get_price_eurusd, now_price_eurusd], \
-                [bool_usdjpy, position_usdjpy, get_price_usdjpy, now_price_usdjpy]
+            return [bool_eurusd, position_eurusd,
+                    get_price_eurusd, now_price_eurusd], \
+                [bool_usdjpy, position_usdjpy,
+                 get_price_usdjpy, now_price_usdjpy]
+
         except WebDriverException as e:
             print('Error Occured position_bool \n{}'.format(e))
             raise ToDriverRefreshError(e)
@@ -614,37 +609,18 @@ class TraderDriver:
         button_[1].click()
 
 
-class NTraderDriver(TraderDriver):
-    def __init__(self, chrome_port=9222):
-        launch_chrome(chrome_port)
-
-        options = webdriver.ChromeOptions()
-        options.add_argument("--no-sandbox")
-        options.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36")
-        options.add_experimental_option(
-            "debuggerAddress", "127.0.0.1:{}".format(chrome_port))
-
-        chrome_service = fs.Service(
-            executable_path=ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=chrome_service, options=options)
-        self.wait = WebDriverWait(self.driver, 60)
-        self.actions = ActionChains(self.driver)
-
-        self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
-                           'EURUSD': {'sell': 2, 'buy': 3}}
-
-        self.driver.get('https://web.thinktrader.com/web-trader/watchlist')
-
-
 class FIXAR(TraderDriver):
-    def __init__(self, amount,
+    def __init__(self, amount, k, pr_k,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy):
         super().__init__()
         self.amount = amount
-        self.fixa = {'EURUSD': FIXA('EURUSD', sashine_eurusd, gyaku_sashine_eurusd),
-                     'USDJPY': FIXA('USDJPY', sashine_usdjpy, gyaku_sashine_usdjpy)}
+        self.fixa = {'EURUSD': FIXA('EURUSD',
+                                    sashine_eurusd, gyaku_sashine_eurusd,
+                                    k, pr_k),
+                     'USDJPY': FIXA('USDJPY',
+                                    sashine_usdjpy, gyaku_sashine_usdjpy,
+                                    k, pr_k)}
 
     def run(self):
         usdjpy, eurusd = self.get_price()
@@ -727,11 +703,11 @@ class FIXAR(TraderDriver):
 
 
 class FIXAR_V2(FIXAR):
-    def __init__(self, amount,
+    def __init__(self, amount, k, pr_k,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son):
-        super().__init__(amount,
+        super().__init__(amount, k, pr_k,
                          sashine_eurusd, gyaku_sashine_eurusd,
                          sashine_usdjpy, gyaku_sashine_usdjpy)
 
@@ -804,7 +780,9 @@ sashine_usdjpy, gyaku_sashine_usdjpy = 0.06, 0.12
 dynamic_rik = {'EURUSD': 0.005/100, 'USDJPY': 0.005}
 dynamic_son = {'EURUSD': round(0.1/150, 5), 'USDJPY': 0.1}
 
-fixar = FIXAR_V2(amount,
+k, pr_k = 3, 3
+
+fixar = FIXAR_V2(amount, k, pr_k,
                  sashine_eurusd, gyaku_sashine_eurusd,
                  sashine_usdjpy, gyaku_sashine_usdjpy,
                  dynamic_rik, dynamic_son)

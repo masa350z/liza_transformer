@@ -4,7 +4,8 @@ import pandas as pd
 import numpy as np
 
 
-def simulate(hist_data, rik, son, spread=0, pred=None, std_lis=None, std_v=float('inf')):
+def simulate(hist_data, rik, son,
+             spread=0, pred=None, std_lis=None, std_v=float('inf')):
     kane = 0
     asset = []
     profit_list = []
@@ -39,6 +40,45 @@ def simulate(hist_data, rik, son, spread=0, pred=None, std_lis=None, std_v=float
     return kane, np.array(asset), np.array(profit_list)
 
 
+def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
+    kane = 0
+    asset = []
+    profit_list = []
+    get_price = 0
+    position = 0
+    position_count = 0
+
+    for h, i in enumerate(hist_data):
+        position_count = position_count - 1 if position_count > 0 else 0
+        profit = (i - get_price)*position - spread
+        if get_price != 0:
+            if (i - get_price)*position > rik*get_price:
+                kane += profit
+                profit_list.append(profit)
+                get_price = 0
+
+            elif (i - get_price)*position < -son*get_price:
+                kane += profit
+                profit_list.append(profit)
+                get_price = 0
+
+            elif position_count == 0:
+                kane += profit
+                profit_list.append(profit)
+                get_price = 0
+
+        if get_price == 0:
+            get_price = i
+            up_ = pred[h] > 0.5
+
+            position = 1 if up_ else -1
+            position_count = pr_k
+
+        asset.append(kane)
+
+    return kane, np.array(asset), np.array(profit_list)
+
+
 # %%
 y_mode = 'binary'
 
@@ -46,8 +86,8 @@ symbol = 'USDJPY'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
-k = 3
-pr_k = 3
+k = 12
+pr_k = 12
 
 base_m = 1
 m_lis = [base_m, base_m*2, base_m*3]
@@ -79,19 +119,23 @@ std_ave, std_std
 data_x.shape
 # %%
 rik = 0.005
-son = 0.1
+son = 0.008
 
 kane, asset, profit_list = simulate(hist_data, rik, son,
-                                    pred=pred,
-                                    std_lis=std_,
-                                    std_v=5.368888e-06+(0.00082402374)*1.2)
+                                    pred=pred)
 kane
 # %%
-pd.DataFrame(asset).plot()
+asset[-1] - asset[int(len(asset)*0.8)]
 # %%
-a = 7000000
-b = a+60*24*1
-pd.DataFrame(asset[a:b]).plot()
+rik = 0.003/100
+son = 0.005/100
+
+kane, asset, profit_list = simulate_2(hist_data, pr_k, rik, son, pred)
+kane
+# %%
+pd.DataFrame(asset[int(len(asset)*0.8):]).plot()
+# %%
+pd.DataFrame(hist_data).plot()
 # %%
 win_ave = np.average(profit_list[profit_list > 0])
 lose_ave = np.average(profit_list[profit_list < 0])
@@ -101,5 +145,4 @@ lose_std = np.std(profit_list[profit_list < 0])
 
 # %%
 win_ave, lose_ave, win_std, lose_std
-
 # %%
