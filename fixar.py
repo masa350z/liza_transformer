@@ -1,5 +1,4 @@
 # %%
-import pandas as pd
 from selenium.common.exceptions import StaleElementReferenceException, \
     WebDriverException, NoSuchElementException, \
     ElementClickInterceptedException, NoSuchWindowException, \
@@ -74,10 +73,6 @@ class FIXA(FX_Model):
     def __init__(self, symbol, sashine, gyakusashine,
                  k, pr_k):
         super().__init__(symbol, 1, k, pr_k)
-        self.count = 0
-        self.position = 0
-        self.get_price = 0
-
         self.k, self.pr_k = k, pr_k
 
         self.price_list = []
@@ -85,7 +80,7 @@ class FIXA(FX_Model):
 
     def refresh_pricelist(self, price):
         self.price_list.append(price)
-        self.price_list = self.price_list[-10:]
+        self.price_list = self.price_list[-(3*self.k+1):]
 
     def ret_prediction(self):
         if len(self.price_list) < 3*self.k:
@@ -96,44 +91,16 @@ class FIXA(FX_Model):
 
         return up_
 
-    def refresh_position(self, price, random_=False):
-        self.refresh_position(price)
-
-        if self.position != 0:
-            diff = price - self.get_price
-
-            if diff*self.position > self.sahine:
-                self.position = 0
-            elif diff*self.position < -self.gyakusashine:
-                self.position = 0
-
-        if self.position == 0:
-            if len(self.price_list) >= 9:
-                if random_:
-                    up_ = random.random() > 0.5
-                else:
-                    up_ = self.ret_prediction()
-
-                if up_:
-                    self.position = 1
-                else:
-                    self.position = -1
-
-            else:
-                if random.random() > 0.5:
-                    self.position = 1
-                else:
-                    self.position = -1
-
-            self.get_price = price
-
-        self.count += 1
-
 
 class TraderDriver:
     def __init__(self):
         options = uc.ChromeOptions()
         options.add_argument("--no-sandbox")
+        options.add_experimental_option("prefs", {
+            "credentials_enable_service": False,
+            "profile.password_manager_enabled": False,
+            'translate': {'enabled': False}
+        })
 
         options.headless = False
 
@@ -204,62 +171,67 @@ class TraderDriver:
 
     def make_order(self, symbol, position, amount,
                    sashine, gyaku_sashine):
-        try:
-            self.select_symbol_position(symbol, position)
-            time.sleep(1)
+        # try:
+        self.select_symbol_position(symbol, position)
+        time.sleep(1)
 
-            error_count = 0
-            while error_count < 3:
-                try:
-                    tradeticket_container = self.driver.find_element(
-                        By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-                    error_count = 100
-                except NoSuchElementException:
-                    error_count += 1
-                    self.select_symbol_position(symbol, position)
-                    time.sleep(1)
-                    continue
-
-            if error_count == 3:
-                raise ToDriverRefreshError()
-            else:
-                tradeticket_container.find_elements(
-                    By.CLASS_NAME, 'checkbox')[0].click()
-                tradeticket_container.find_elements(
-                    By.CLASS_NAME, 'checkbox')[1].click()
-
+        error_count = 0
+        while error_count < 3:
+            try:
                 tradeticket_container = self.driver.find_element(
                     By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+                error_count = 100
 
-                input_ = tradeticket_container.find_elements(
-                    By.TAG_NAME, 'input')
+            except NoSuchElementException:
+                error_count += 1
+                self.select_symbol_position(symbol, position)
+                time.sleep(1)
+                continue
 
-                amount_inp = input_[2]
-                sashine_inp = input_[4]
-                gyaku_sashine_inp = input_[6]
+            except ElementClickInterceptedException:
+                raise ToDriverRefreshError()
 
-                amount_inp.clear()
-                amount_inp.send_keys(amount)
+        if error_count == 3:
+            raise ToDriverRefreshError()
+        else:
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[0].click()
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[1].click()
 
-                sashine_inp.clear()
-                sashine_inp.send_keys(sashine)
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-                gyaku_sashine_inp.clear()
-                gyaku_sashine_inp.send_keys(gyaku_sashine)
+            input_ = tradeticket_container.find_elements(
+                By.TAG_NAME, 'input')
 
-                for _ in range(2):
-                    elements = self.driver.find_elements(
-                        By.CLASS_NAME, "Button_button__CftuL")
-                    elements[1].click()
-                    time.sleep(1)
+            amount_inp = input_[2]
+            sashine_inp = input_[4]
+            gyaku_sashine_inp = input_[6]
 
+            amount_inp.clear()
+            amount_inp.send_keys(amount)
+
+            sashine_inp.clear()
+            sashine_inp.send_keys(sashine)
+
+            gyaku_sashine_inp.clear()
+            gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+            for _ in range(2):
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "Button_button__CftuL")
+                elements[1].click()
+                time.sleep(1)
+        """
         except ElementClickInterceptedException as e:
-            print('Error occured make_nariyuki_order \n{}'.format(e))
+            print('Error occured make_order \n{}'.format(e))
             raise ToPageRefreshError(e)
 
         except Exception as e:
-            print('Error occured make_nariyuki_order \n{}'.format(e))
+            print('Error occured make_order \n{}'.format(e))
             raise ToDriverRefreshError(e)
+        """
 
     def settle_all_position(self):
         elements = self.driver.find_elements(
@@ -365,6 +337,7 @@ class TraderDriver:
         now_price_usdjpy = 0
 
         position_eurusd, position_usdjpy = 0, 0
+        count = 0
         # try:
         dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
         dx_row = [i.text for i in dx_row]
@@ -536,6 +509,7 @@ while error_count < 3:
     # try:
     t = time.time()
     hist_dic = fixar.run(hist_dic=hist_dic)
+
     """
     except ToPageRefreshError as e:
         print(e)
@@ -567,7 +541,10 @@ while error_count < 3:
     print('{}\n{}\n__________\n'.format(count, datetime.now()))
 
     if count % 5 == 0:
-        fixar.driver.refresh()
+        fixar.driver.minimize_window()
+        time.sleep(1)
+        fixar.driver.maximize_window()
+        # fixar.driver.refresh()
 
     with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
         pickle.dump(hist_dic, f)

@@ -82,7 +82,7 @@ def simulate_2(hist_data, pr_k, rik, son, pred, spread=0):
 # %%
 y_mode = 'binary'
 
-symbol = 'EURUSD'
+symbol = 'USDJPY'
 hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
 hist, timestamp = modules.ret_hist(symbol)
 
@@ -109,8 +109,8 @@ pred = pred[:, 0]
 hist_data = data_x[:, -1, 0]
 hist_data = hist_data[::base_m]
 # %%
-rik = 0.008/100
-son = 0.015/100
+rik = 0.01/100
+son = 0.05/100
 
 kane, asset, profit_list = simulate_2(hist_data, pr_k, rik, son, pred)
 kane
