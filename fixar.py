@@ -173,56 +173,58 @@ class TraderDriver:
                    sashine, gyaku_sashine):
         # try:
         self.select_symbol_position(symbol, position)
-        time.sleep(1)
+        time.sleep(3)
 
         error_count = 0
-        while error_count < 3:
-            try:
-                tradeticket_container = self.driver.find_element(
-                    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-                error_count = 100
+        # while error_count < 3:
+        # try:
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        error_count = 100
 
-            except NoSuchElementException:
-                error_count += 1
-                self.select_symbol_position(symbol, position)
-                time.sleep(1)
-                continue
+        """
+        except NoSuchElementException:
+            error_count += 1
+            self.select_symbol_position(symbol, position)
+            time.sleep(3)
+            continue
 
-            except ElementClickInterceptedException:
-                raise ToDriverRefreshError()
-
-        if error_count == 3:
+        except ElementClickInterceptedException:
             raise ToDriverRefreshError()
-        else:
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'checkbox')[0].click()
-            tradeticket_container.find_elements(
-                By.CLASS_NAME, 'checkbox')[1].click()
+        """
 
-            tradeticket_container = self.driver.find_element(
-                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        # if error_count == 3:
+        #    raise ToDriverRefreshError()
+        # else:
+        tradeticket_container.find_elements(
+            By.CLASS_NAME, 'checkbox')[0].click()
+        tradeticket_container.find_elements(
+            By.CLASS_NAME, 'checkbox')[1].click()
 
-            input_ = tradeticket_container.find_elements(
-                By.TAG_NAME, 'input')
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-            amount_inp = input_[2]
-            sashine_inp = input_[4]
-            gyaku_sashine_inp = input_[6]
+        input_ = tradeticket_container.find_elements(
+            By.TAG_NAME, 'input')
 
-            amount_inp.clear()
-            amount_inp.send_keys(amount)
+        amount_inp = input_[2]
+        sashine_inp = input_[4]
+        gyaku_sashine_inp = input_[6]
 
-            sashine_inp.clear()
-            sashine_inp.send_keys(sashine)
+        amount_inp.clear()
+        amount_inp.send_keys(amount)
 
-            gyaku_sashine_inp.clear()
-            gyaku_sashine_inp.send_keys(gyaku_sashine)
+        sashine_inp.clear()
+        sashine_inp.send_keys(sashine)
 
-            for _ in range(2):
-                elements = self.driver.find_elements(
-                    By.CLASS_NAME, "Button_button__CftuL")
-                elements[1].click()
-                time.sleep(1)
+        gyaku_sashine_inp.clear()
+        gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+        for _ in range(2):
+            elements = self.driver.find_elements(
+                By.CLASS_NAME, "Button_button__CftuL")
+            elements[1].click()
+            time.sleep(1)
         """
         except ElementClickInterceptedException as e:
             print('Error occured make_order \n{}'.format(e))
@@ -424,6 +426,14 @@ class FIXAR(TraderDriver):
                     == 'https://web.thinktrader.com/account/login':
                 self.login()
             else:
+                # 通知バナーboxを削除
+                rnc__base = self.driver.find_elements(
+                    By.CLASS_NAME, 'rnc__base')
+                if len(rnc__base) > 0:
+                    banner_element = "div.rnc__base"  # CSSセレクタを指定
+                    self.driver.execute_script(
+                        f"document.querySelector('{banner_element}').remove();")
+
                 for i in range(2):
                     symbol = 'EURUSD' if i == 0 else 'USDJPY'
 
@@ -540,11 +550,11 @@ while error_count < 3:
     count += 1
     print('{}\n{}\n__________\n'.format(count, datetime.now()))
 
-    if count % 5 == 0:
-        fixar.driver.minimize_window()
-        time.sleep(1)
-        fixar.driver.maximize_window()
-        # fixar.driver.refresh()
+    # if count % 5 == 0:
+    # fixar.driver.minimize_window()
+    # time.sleep(1)
+    # fixar.driver.maximize_window()
+    # fixar.driver.refresh()
 
     with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
         pickle.dump(hist_dic, f)
@@ -557,4 +567,10 @@ while error_count < 3:
     time.sleep(sleep_time)
 
 line.send_to_masaumi('FIXAR stopped')
+# %%
+"""
+p class=ToastNotificationContent_message__2G0DF
+
+ToastNotificationContent_message__2G0DF
+"""
 # %%
