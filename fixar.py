@@ -153,8 +153,8 @@ class TraderDriver:
             pass
 
     def select_symbol_position(self, symbol, position):
-        retry = True
-        while retry:
+        error_count = 0
+        while error_count < 3:
             try:
                 elements = self.driver.find_elements(
                     By.CLASS_NAME, "Item_iconContainer__10Rq0")
@@ -164,67 +164,73 @@ class TraderDriver:
                     By.CLASS_NAME, "BidAskSpread_tickerContainer__jjJnL")
                 elements[self.button_dic[symbol][position]].click()
 
-                retry = False
+                error_count = 100
 
-            except StaleElementReferenceException:
+            except (StaleElementReferenceException, IndexError):
+                error_count += 1
+                time.sleep(3)
                 continue
+
+        if error_count == 3:
+            raise ToDriverRefreshError()
 
     def make_order(self, symbol, position, amount,
                    sashine, gyaku_sashine):
         # try:
         self.select_symbol_position(symbol, position)
-        time.sleep(3)
+        time.sleep(1)
 
         error_count = 0
-        # while error_count < 3:
-        # try:
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-        error_count = 100
+        while error_count < 3:
+            try:
+                tradeticket_container = self.driver.find_element(
+                    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+                error_count = 100
 
-        """
-        except NoSuchElementException:
-            error_count += 1
-            self.select_symbol_position(symbol, position)
-            time.sleep(3)
-            continue
+            except NoSuchElementException as e:
+                print(e)
+                self.take_screenshot()
+                error_count += 1
+                self.select_symbol_position(symbol, position)
+                time.sleep(1)
+                continue
 
-        except ElementClickInterceptedException:
-            raise ToDriverRefreshError()
-        """
+        if error_count == 3:
+            raise ToPageRefreshError()
+        else:
+            try:
+                tradeticket_container.find_elements(
+                    By.CLASS_NAME, 'checkbox')[0].click()
+                tradeticket_container.find_elements(
+                    By.CLASS_NAME, 'checkbox')[1].click()
 
-        # if error_count == 3:
-        #    raise ToDriverRefreshError()
-        # else:
-        tradeticket_container.find_elements(
-            By.CLASS_NAME, 'checkbox')[0].click()
-        tradeticket_container.find_elements(
-            By.CLASS_NAME, 'checkbox')[1].click()
+                tradeticket_container = self.driver.find_element(
+                    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+                input_ = tradeticket_container.find_elements(
+                    By.TAG_NAME, 'input')
 
-        input_ = tradeticket_container.find_elements(
-            By.TAG_NAME, 'input')
+                amount_inp = input_[2]
+                sashine_inp = input_[4]
+                gyaku_sashine_inp = input_[6]
 
-        amount_inp = input_[2]
-        sashine_inp = input_[4]
-        gyaku_sashine_inp = input_[6]
+                amount_inp.clear()
+                amount_inp.send_keys(amount)
 
-        amount_inp.clear()
-        amount_inp.send_keys(amount)
+                sashine_inp.clear()
+                sashine_inp.send_keys(sashine)
 
-        sashine_inp.clear()
-        sashine_inp.send_keys(sashine)
+                gyaku_sashine_inp.clear()
+                gyaku_sashine_inp.send_keys(gyaku_sashine)
 
-        gyaku_sashine_inp.clear()
-        gyaku_sashine_inp.send_keys(gyaku_sashine)
-
-        for _ in range(2):
-            elements = self.driver.find_elements(
-                By.CLASS_NAME, "Button_button__CftuL")
-            elements[1].click()
-            time.sleep(1)
+                for _ in range(2):
+                    elements = self.driver.find_elements(
+                        By.CLASS_NAME, "Button_button__CftuL")
+                    elements[1].click()
+                    time.sleep(1)
+            except IndexError as e:
+                print(e)
+                raise ToPageRefreshError(e)
         """
         except ElementClickInterceptedException as e:
             print('Error occured make_order \n{}'.format(e))
@@ -339,54 +345,72 @@ class TraderDriver:
         now_price_usdjpy = 0
 
         position_eurusd, position_usdjpy = 0, 0
-        count = 0
         # try:
-        dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
-        dx_row = [i.text for i in dx_row]
+        error_count = 0
+        while error_count < 3:
+            try:
+                dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
+                dx_row = [i.text for i in dx_row]
+                error_count = 100
+            except StaleElementReferenceException as e:
+                print('position_bool')
+                print(e)
+                error_count += 1
+                time.sleep(1)
+                continue
 
-        bool_eurusd = 'EURUSD' in dx_row
-        bool_usdjpy = 'USDJPY' in dx_row
+        if error_count == 3:
+            raise ToPageRefreshError()
+        else:
+            bool_eurusd = 'EURUSD' in dx_row
+            bool_usdjpy = 'USDJPY' in dx_row
 
-        if bool_eurusd and bool_usdjpy:
-            get_price_eurusd = float(dx_row[2].split('\n')[3])
-            now_price_eurusd = float(dx_row[2].split('\n')[5])
+            if bool_eurusd and bool_usdjpy:
+                get_price_eurusd = float(dx_row[2].split('\n')[3])
+                now_price_eurusd = float(dx_row[2].split('\n')[5])
 
-            get_price_usdjpy = float(dx_row[3].split('\n')[3])
-            now_price_usdjpy = float(dx_row[3].split('\n')[5])
+                get_price_usdjpy = float(dx_row[3].split('\n')[3])
+                now_price_usdjpy = float(dx_row[3].split('\n')[5])
 
-            position_eurusd = dx_row[2].split('\n')[0]
-            position_usdjpy = dx_row[3].split('\n')[0]
+                position_eurusd = dx_row[2].split('\n')[0]
+                position_usdjpy = dx_row[3].split('\n')[0]
 
-            position_eurusd = 1 if position_eurusd == '買い' else -1
-            position_usdjpy = 1 if position_usdjpy == '買い' else -1
+                position_eurusd = 1 if position_eurusd == '買い' else -1
+                position_usdjpy = 1 if position_usdjpy == '買い' else -1
 
-        elif bool_eurusd:
-            get_price_eurusd = float(dx_row[2].split('\n')[3])
-            now_price_eurusd = float(dx_row[2].split('\n')[5])
+            elif bool_eurusd:
+                get_price_eurusd = float(dx_row[2].split('\n')[3])
+                now_price_eurusd = float(dx_row[2].split('\n')[5])
 
-            position_eurusd = dx_row[2].split('\n')[0]
-            position_eurusd = 1 if position_eurusd == '買い' else -1
+                position_eurusd = dx_row[2].split('\n')[0]
+                position_eurusd = 1 if position_eurusd == '買い' else -1
 
-        elif bool_usdjpy:
-            get_price_usdjpy = float(dx_row[2].split('\n')[3])
-            now_price_usdjpy = float(dx_row[2].split('\n')[5])
+            elif bool_usdjpy:
+                get_price_usdjpy = float(dx_row[2].split('\n')[3])
+                now_price_usdjpy = float(dx_row[2].split('\n')[5])
 
-            position_usdjpy = dx_row[2].split('\n')[0]
-            position_usdjpy = 1 if position_usdjpy == '買い' else -1
+                position_usdjpy = dx_row[2].split('\n')[0]
+                position_usdjpy = 1 if position_usdjpy == '買い' else -1
 
-        return [bool_eurusd, position_eurusd,
-                get_price_eurusd, now_price_eurusd], \
-            [bool_usdjpy, position_usdjpy,
-                get_price_usdjpy, now_price_usdjpy]
-        """
-        except StaleElementReferenceException as e:
-            print('Error Occured position_bool \n{}'.format(e))
-            raise ToPageRefreshError(e)
+            return [bool_eurusd, position_eurusd,
+                    get_price_eurusd, now_price_eurusd], \
+                [bool_usdjpy, position_usdjpy,
+                    get_price_usdjpy, now_price_usdjpy]
+            """
+            except StaleElementReferenceException as e:
+                print('Error Occured position_bool \n{}'.format(e))
+                raise ToPageRefreshError(e)
 
-        except WebDriverException as e:
-            print('Error Occured position_bool \n{}'.format(e))
-            raise ToDriverRefreshError(e)
-        """
+            except WebDriverException as e:
+                print('Error Occured position_bool \n{}'.format(e))
+                raise ToDriverRefreshError(e)
+            """
+
+    def take_screenshot(self, filename="screenshot.png"):
+        # pass
+        # self.driver.maximize_window()
+        # スクリーンショットを取得して指定されたファイル名で保存
+        self.driver.save_screenshot(filename)
 
 
 class FIXAR(TraderDriver):
@@ -550,15 +574,12 @@ while error_count < 3:
     count += 1
     print('{}\n{}\n__________\n'.format(count, datetime.now()))
 
-    # if count % 5 == 0:
-    # fixar.driver.minimize_window()
-    # time.sleep(1)
-    # fixar.driver.maximize_window()
-    # fixar.driver.refresh()
-
+    if count % 10 == 0:
+        fixar.driver.refresh()
+    """
     with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
         pickle.dump(hist_dic, f)
-
+    """
     if fixar.driver.current_url == 'https://web.thinktrader.com/account/login':
         fixar.login()
 
