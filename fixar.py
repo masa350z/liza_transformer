@@ -18,7 +18,6 @@ from datetime import datetime
 import numpy as np
 import random
 import time
-import pickle
 from glob import glob
 
 
@@ -167,9 +166,16 @@ class TraderDriver:
                 error_count = 100
 
             except (StaleElementReferenceException, IndexError):
+                # 要素がない場合。読み込みが完了していないことが多い
                 error_count += 1
                 time.sleep(3)
                 continue
+
+            except ElementClickInterceptedException:
+                # 資産が不足していますウィンドウが出る場合
+                time.sleep(60)
+                ToPageRefreshError()
+                break
 
         if error_count == 3:
             raise ToDriverRefreshError()
@@ -189,7 +195,6 @@ class TraderDriver:
 
             except NoSuchElementException as e:
                 print(e)
-                self.take_screenshot()
                 error_count += 1
                 self.select_symbol_position(symbol, position)
                 time.sleep(1)
@@ -242,51 +247,75 @@ class TraderDriver:
         """
 
     def settle_all_position(self):
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "PositionGrid_triggerContainer__1yWG1")
-        elements[1].click()
-        time.sleep(1)
-        elements = self.driver.find_elements(
-            By.CLASS_NAME, "Button_buttonLabel__3kVe6")
-        elements[1].click()
-
-    def settle_position(self, symbol):
-        try:
-            dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
-            dx_row = [i.text for i in dx_row]
-
-            bool_eurusd, bool_usdjpy = False, False
-
-            for i in dx_row:
-                if 'EURUSD' in i:
-                    bool_eurusd = True
-                if 'USDJPY' in i:
-                    bool_usdjpy = True
-
-            if bool_usdjpy and bool_eurusd:
-                button_dic = {'EURUSD': 11,
-                              'USDJPY': 13}
-
-                posi = self.driver.find_elements(
-                    By.CLASS_NAME,
-                    "PositionGrid_closeAndMoreOptionsCell__1EeeS")
-                posi[button_dic[symbol]].click()
+        error_count = 0
+        while error_count < 3:
+            try:
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "PositionGrid_triggerContainer__1yWG1")
+                elements[1].click()
                 time.sleep(1)
-
                 elements = self.driver.find_elements(
                     By.CLASS_NAME, "Button_buttonLabel__3kVe6")
                 elements[1].click()
 
-            else:
-                self.settle_all_position()
+            except StaleElementReferenceException as e:
+                print(e)
+                print('settle_all_position')
+                error_count += 1
+                time.sleep(3)
+                continue
 
-        except StaleElementReferenceException as e:
-            raise ToPageRefreshError(e)
+        if error_count == 3:
+            raise ToPageRefreshError()
+
+    def settle_position(self, symbol):
+        error_count = 0
+        while error_count < 3:
+            try:
+                dx_row = self.driver.find_elements(By.CLASS_NAME, 'dx-row')
+                dx_row = [i.text for i in dx_row]
+
+                bool_eurusd, bool_usdjpy = False, False
+
+                for i in dx_row:
+                    if 'EURUSD' in i:
+                        bool_eurusd = True
+                    if 'USDJPY' in i:
+                        bool_usdjpy = True
+
+                if bool_usdjpy and bool_eurusd:
+                    button_dic = {'EURUSD': 11,
+                                  'USDJPY': 13}
+
+                    posi = self.driver.find_elements(
+                        By.CLASS_NAME,
+                        "PositionGrid_closeAndMoreOptionsCell__1EeeS")
+                    posi[button_dic[symbol]].click()
+                    time.sleep(1)
+
+                    elements = self.driver.find_elements(
+                        By.CLASS_NAME, "Button_buttonLabel__3kVe6")
+                    elements[1].click()
+
+                else:
+                    self.settle_all_position()
+
+                error_count = 100
+
+            except StaleElementReferenceException as e:
+                print(e)
+                print('settle_position')
+                error_count += 1
+                time.sleep(3)
+                continue
+
+        if error_count == 3:
+            raise ToPageRefreshError()
 
     def get_price(self):
-        retry = 0
+        error_count = 0
         usdjpy, eurusd = 0, 0
-        while retry < 3:
+        while error_count < 3:
             try:
                 elements = self.driver.find_elements(
                     By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
@@ -301,10 +330,11 @@ class TraderDriver:
                 break
             except (StaleElementReferenceException,
                     NoSuchElementException):
-                retry += 1
+                error_count += 1
+                time.sleep(1)
 
-        retry = 0
-        while retry < 3:
+        error_count = 0
+        while error_count < 3:
             try:
                 elements = self.driver.find_elements(
                     By.CLASS_NAME, "BidAskSpread_showPrice__2ijn7")
@@ -319,7 +349,8 @@ class TraderDriver:
                 break
             except (StaleElementReferenceException,
                     NoSuchElementException):
-                retry += 1
+                error_count += 1
+                time.sleep(1)
 
         usdjpy = float(usdjpy)
         eurusd = float(eurusd)
@@ -337,15 +368,7 @@ class TraderDriver:
             print('Error Occured zero_spread \n{}'.format(e))
             return False
 
-    def position_bool(self):
-        get_price_eurusd = 0
-        now_price_eurusd = 0
-
-        get_price_usdjpy = 0
-        now_price_usdjpy = 0
-
-        position_eurusd, position_usdjpy = 0, 0
-        # try:
+    def check_position_box(self):
         error_count = 0
         while error_count < 3:
             try:
@@ -361,56 +384,118 @@ class TraderDriver:
 
         if error_count == 3:
             raise ToPageRefreshError()
+
+        return dx_row
+
+    def get_double_position_status(self, dx_row):
+        """
+        両symbolのポジションを持つ場合のポジションの状態を返す。
+        """
+        get_price_eurusd = float(dx_row[2].split('\n')[3])
+        now_price_eurusd = float(dx_row[2].split('\n')[5])
+
+        get_price_usdjpy = float(dx_row[3].split('\n')[3])
+        now_price_usdjpy = float(dx_row[3].split('\n')[5])
+
+        position_eurusd = dx_row[2].split('\n')[0]
+        position_usdjpy = dx_row[3].split('\n')[0]
+
+        position_eurusd = 1 if position_eurusd == '買い' else -1
+        position_usdjpy = 1 if position_usdjpy == '買い' else -1
+
+        return get_price_eurusd, now_price_eurusd, position_eurusd, \
+            get_price_usdjpy, now_price_usdjpy, position_usdjpy
+
+    def get_single_position_status(self, dx_row):
+        """
+        片symbolのポジションを持つ場合のポジションの状態を返す。
+        """
+        get_price = float(dx_row[2].split('\n')[3])
+        now_price = float(dx_row[2].split('\n')[5])
+
+        position = dx_row[2].split('\n')[0]
+        position = 1 if position == '買い' else -1
+
+        return get_price, now_price, position
+
+    def position_bool(self):
+        """
+        現在の全ポジションの状態を返す関数
+        """
+        get_price_eurusd, now_price_eurusd = 0, 0
+        get_price_usdjpy, now_price_usdjpy = 0, 0
+        position_eurusd, position_usdjpy = 0, 0
+
+        dx_row = self.check_position_box()
+
+        bool_eurusd = 'EURUSD' in dx_row
+        bool_usdjpy = 'USDJPY' in dx_row
+
+        if bool_eurusd and bool_usdjpy:  # 両symbolがポジションを持つ場合
+            get_price_eurusd, now_price_eurusd, position_eurusd, \
+                get_price_usdjpy, now_price_usdjpy, position_usdjpy \
+                = self.get_double_position_status(dx_row)
+
+        elif bool_eurusd:  # EURUSDのみポジションを持つ場合
+            get_price_eurusd, now_price_eurusd, position_eurusd \
+                = self.get_single_position_status(dx_row)
+
+        elif bool_usdjpy:  # USDJPYのみポジションを持つ場合
+            get_price_usdjpy, now_price_usdjpy, position_usdjpy \
+                = self.get_single_position_status(dx_row)
+
+        return [bool_eurusd, position_eurusd,
+                get_price_eurusd, now_price_eurusd], \
+            [bool_usdjpy, position_usdjpy,
+                get_price_usdjpy, now_price_usdjpy]
+
+    def set_sashine(self, rik, son, line_num):
+        # 建玉リストの一番上。EURUSD or USDJPY
+        tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
+
+        td_ = tbody[-2].find_elements(By.TAG_NAME, 'td')
+        trigger = tbody[-1].find_elements(
+            By.CLASS_NAME, 'PositionGrid_triggerContainer__1yWG1')
+
+        if line_num == 0:
+            get_ = float(td_[4].text)
+            position_ = td_[4-3].text
+            trigger[0].click()
         else:
-            bool_eurusd = 'EURUSD' in dx_row
-            bool_usdjpy = 'USDJPY' in dx_row
+            get_ = float(td_[16].text)
+            position_ = td_[16-3].text
+            trigger[2].click()
 
-            if bool_eurusd and bool_usdjpy:
-                get_price_eurusd = float(dx_row[2].split('\n')[3])
-                now_price_eurusd = float(dx_row[2].split('\n')[5])
+        sashine_gyaku = self.driver.find_elements(
+            By.CLASS_NAME, 'PositionGrid_PopupContainer__3AWXo')[-1]
+        sashine_gyaku.click()
 
-                get_price_usdjpy = float(dx_row[3].split('\n')[3])
-                now_price_usdjpy = float(dx_row[3].split('\n')[5])
+        if position_ == '買い':
+            sashine = get_ + rik
+            gyaku_sashine = get_ - son
+        else:
+            sashine = get_ - rik
+            gyaku_sashine = get_ + son
 
-                position_eurusd = dx_row[2].split('\n')[0]
-                position_usdjpy = dx_row[3].split('\n')[0]
+        self.submit_sashine(sashine, gyaku_sashine)
 
-                position_eurusd = 1 if position_eurusd == '買い' else -1
-                position_usdjpy = 1 if position_usdjpy == '買い' else -1
+    def submit_sashine(self, sashine, gyaku_sashine):
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        inpts_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
 
-            elif bool_eurusd:
-                get_price_eurusd = float(dx_row[2].split('\n')[3])
-                now_price_eurusd = float(dx_row[2].split('\n')[5])
+        inpts_[1].clear()
+        inpts_[1].send_keys(sashine)
 
-                position_eurusd = dx_row[2].split('\n')[0]
-                position_eurusd = 1 if position_eurusd == '買い' else -1
+        inpts_[3].clear()
+        inpts_[3].send_keys(gyaku_sashine)
 
-            elif bool_usdjpy:
-                get_price_usdjpy = float(dx_row[2].split('\n')[3])
-                now_price_usdjpy = float(dx_row[2].split('\n')[5])
+        tradeticket_container = self.driver.find_element(
+            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        button_ = tradeticket_container.find_elements(
+            By.CLASS_NAME, 'Button_button__CftuL')
 
-                position_usdjpy = dx_row[2].split('\n')[0]
-                position_usdjpy = 1 if position_usdjpy == '買い' else -1
-
-            return [bool_eurusd, position_eurusd,
-                    get_price_eurusd, now_price_eurusd], \
-                [bool_usdjpy, position_usdjpy,
-                    get_price_usdjpy, now_price_usdjpy]
-            """
-            except StaleElementReferenceException as e:
-                print('Error Occured position_bool \n{}'.format(e))
-                raise ToPageRefreshError(e)
-
-            except WebDriverException as e:
-                print('Error Occured position_bool \n{}'.format(e))
-                raise ToDriverRefreshError(e)
-            """
-
-    def take_screenshot(self, filename="screenshot.png"):
-        # pass
-        # self.driver.maximize_window()
-        # スクリーンショットを取得して指定されたファイル名で保存
-        self.driver.save_screenshot(filename)
+        button_[1].click()
 
 
 class FIXAR(TraderDriver):
@@ -436,7 +521,10 @@ class FIXAR(TraderDriver):
 
         return price_dic
 
-    def run(self, hist_dic=None):
+    def check_recconect(self):
+        """
+        再接続画面になっていないかの確認
+        """
         try:
             recconect_button = self.driver.find_elements(
                 By.CLASS_NAME, 'ReconnectModal_button__1DjYD')
@@ -445,61 +533,136 @@ class FIXAR(TraderDriver):
 
         if len(recconect_button) > 0:
             raise ToPageRefreshError('recconect')
+
+    def delete_notif_banner(self):
+        """
+        通知バナーboxを削除
+        """
+        rnc__base = self.driver.find_elements(By.CLASS_NAME, 'rnc__base')
+        if len(rnc__base) > 0:
+            banner_element = "div.rnc__base"  # CSSセレクタを指定
+            self.driver.execute_script(
+                f"document.querySelector('{banner_element}').remove();")
+
+    def run(self, hist_dic=None):
+        # 再接続画面になっていないかの確認
+        self.check_recconect()
+
+        if self.driver.current_url\
+                == 'https://web.thinktrader.com/account/login':
+            self.login()
         else:
-            if self.driver.current_url\
-                    == 'https://web.thinktrader.com/account/login':
-                self.login()
-            else:
-                # 通知バナーboxを削除
-                rnc__base = self.driver.find_elements(
-                    By.CLASS_NAME, 'rnc__base')
-                if len(rnc__base) > 0:
-                    banner_element = "div.rnc__base"  # CSSセレクタを指定
-                    self.driver.execute_script(
-                        f"document.querySelector('{banner_element}').remove();")
+            # 通知バナーboxを削除
+            self.delete_notif_banner()
 
-                for i in range(2):
-                    symbol = 'EURUSD' if i == 0 else 'USDJPY'
+            position_bool = self.position_bool()
+            symbol_status_list = []
+            for i in range(2):
+                symbol = 'EURUSD' if i == 0 else 'USDJPY'
+                settle, new_order, refresh_sashine = self.refresh_symbol_status(
+                    symbol, position_bool)
+                symbol_status_list.append(
+                    [settle, new_order, refresh_sashine])
 
-                    position_bool = self.position_bool()
-                    rate = self.ret_pricedic()[symbol]
-                    self.fixa[symbol].refresh_pricelist(rate)
+            for j in range(2):
+                settle, new_order, refresh_sashine = symbol_status_list[j]
+                pre_position = position_bool[j][1]
 
-                    if position_bool[i][0]:
-                        get_price = position_bool[i][2]
-                        now_price = position_bool[i][3]
-                        position = position_bool[i][1]
-                        price_diff = (now_price - get_price)*position
+                if new_order is not False:
+                    symbol_status_list.append(
+                        [pre_position,
+                            ['new_order', new_order[0], new_order[1], new_order[2]]])
 
-                        rik_diff = self.dynamic_rik[symbol]*get_price
-                        son_diff = self.dynamic_son[symbol]*get_price
-
-                        if price_diff > rik_diff or price_diff < -son_diff:
-                            self.settle_position(symbol)
-                        time.sleep(3)
+                elif settle is not False:
+                    if refresh_sashine is not False:
+                        symbol_status_list.append(
+                            [pre_position,
+                                'refresh_sashine', refresh_sashine[0], refresh_sashine[1]]
+                        )
 
                     else:
-                        if self.zero_spread():
-                            rate = self.ret_pricedic()[symbol]
-                            pred = self.fixa[symbol].ret_prediction()
+                        symbol_status_list.append(
+                            [pre_position,
+                                'settle_position'])
 
-                            side = 'buy' if pred else 'sell'
-                            sashine = rate + \
-                                (self.fixa[symbol].sahine)*(1 if pred else -1)
-                            gyaku_sashine = rate - \
-                                (self.fixa[symbol].gyakusashine) * \
-                                (1 if pred else -1)
+                rate = self.ret_pricedic()[symbol]
+                self.fixa[symbol].refresh_pricelist(rate)
 
-                            self.make_order(symbol, side,
-                                            self.amount,
-                                            sashine, gyaku_sashine)
-                            time.sleep(3)
+                if position_bool[i][0]:
+                    get_price = position_bool[i][2]
+                    now_price = position_bool[i][3]
+                    position = position_bool[i][1]
+                    price_diff = (now_price - get_price)*position
 
-                    if hist_dic is not None:
-                        hist_dic[symbol].append(
-                            self.fixa[symbol].price_list[-1])
+                    rik_diff = self.dynamic_rik[symbol]*get_price
+                    son_diff = self.dynamic_son[symbol]*get_price
+
+                    if price_diff > rik_diff or price_diff < -son_diff:
+                        self.settle_position(symbol)
+                    time.sleep(3)
+
+                else:
+                    if self.zero_spread():
+                        rate = self.ret_pricedic()[symbol]
+                        pred = self.fixa[symbol].ret_prediction()
+
+                        side = 'buy' if pred else 'sell'
+                        sashine = rate + \
+                            (self.fixa[symbol].sahine)*(1 if pred else -1)
+                        gyaku_sashine = rate - \
+                            (self.fixa[symbol].gyakusashine) * \
+                            (1 if pred else -1)
+
+                        self.make_order(symbol, side,
+                                        self.amount,
+                                        sashine, gyaku_sashine)
+                        time.sleep(3)
+
+                if hist_dic is not None:
+                    hist_dic[symbol].append(
+                        self.fixa[symbol].price_list[-1])
 
         return hist_dic
+
+    def refresh_symbol_status(self, symbol, position_bool):
+        settle = False
+        new_order = False
+        refresh_sashine = False
+
+        i = 0 if symbol == 'EURUSD' else 1
+
+        rate = self.ret_pricedic()[symbol]
+        self.fixa[symbol].refresh_pricelist(rate)
+
+        if position_bool[i][0]:
+            get_price = position_bool[i][2]
+            now_price = position_bool[i][3]
+            position = position_bool[i][1]
+            price_diff = (now_price - get_price)*position
+
+            rik_diff = self.dynamic_rik[symbol]*get_price
+            son_diff = self.dynamic_son[symbol]*get_price
+
+            if price_diff > rik_diff or price_diff < -son_diff:
+                settle = True
+
+        if (not position_bool[i][0]) or settle:
+            rate = self.ret_pricedic()[symbol]
+            pred = self.fixa[symbol].ret_prediction()
+
+            sashine = rate + \
+                (self.fixa[symbol].sahine)*(1 if pred else -1)
+            gyaku_sashine = rate - \
+                (self.fixa[symbol].gyakusashine) * \
+                (1 if pred else -1)
+
+            refresh_sashine = [sashine, gyaku_sashine]
+
+            if (not position_bool[i][0]):
+                side = 'buy' if pred else 'sell'
+                new_order = [side, sashine, gyaku_sashine]
+
+        return settle, new_order, refresh_sashine
 
     def driver_refresh(self):
         try:
@@ -589,9 +752,5 @@ while error_count < 3:
 
 line.send_to_masaumi('FIXAR stopped')
 # %%
-"""
-p class=ToastNotificationContent_message__2G0DF
-
-ToastNotificationContent_message__2G0DF
-"""
+fixar.run()
 # %%
