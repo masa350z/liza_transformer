@@ -291,6 +291,11 @@ class TraderDriver:
                 time.sleep(3)
                 continue
 
+            except IndexError as e:
+                print(e)
+                print('settle_all_position')
+                error_count = 100
+
         if error_count == 3:
             raise ToPageRefreshError()
 
@@ -497,16 +502,21 @@ class TraderDriver:
             else:
                 line_num = 0
 
-        if line_num == 0:
-            trigger[0].click()
-        else:
-            trigger[2].click()
+        try:
+            if line_num == 0:
+                trigger[0].click()
+            else:
+                trigger[2].click()
 
-        sashine_gyaku = self.driver.find_elements(
-            By.CLASS_NAME, 'PositionGrid_PopupContainer__3AWXo')[-1]
-        sashine_gyaku.click()
+            sashine_gyaku = self.driver.find_elements(
+                By.CLASS_NAME, 'PositionGrid_PopupContainer__3AWXo')[-1]
+            sashine_gyaku.click()
 
-        self.submit_sashine(sashine, gyaku_sashine)
+            self.submit_sashine(sashine, gyaku_sashine)
+
+        # 建玉がない（逆指値決済された）
+        except IndexError as e:
+            print(e)
 
     def submit_sashine(self, sashine, gyaku_sashine):
         tradeticket_container = self.driver.find_element(
