@@ -18,7 +18,6 @@ from datetime import datetime
 import numpy as np
 import random
 import time
-from glob import glob
 
 
 def ret_inpdata(hist, k):
