@@ -7,7 +7,7 @@ import os
 
 
 def ret_hist(symbol):
-    hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+    hist_path = 'E:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
     df = pd.read_csv(hist_path)
     hist = np.array(df['price'], dtype='float32')
     timestamp = np.array(df['timestamp'], dtype='int32')
@@ -28,10 +28,10 @@ def ret_kane_asset(hist, rik, son):
             else:
                 pos = -1
         else:
-            if (i - position)*pos > rik:
+            if (i - position)*pos > rik*position:
                 kane += (i - position)*pos
                 position = 0
-            elif (i - position)*pos < -son:
+            elif (i - position)*pos < -son*position:
                 kane += (i - position)*pos
                 position = 0
         asset.append(kane)

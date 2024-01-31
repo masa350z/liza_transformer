@@ -8,6 +8,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome import service as fs
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 
 import undetected_chromedriver as uc
 
@@ -62,7 +63,10 @@ class FX_Model:
         self.model.load_weights(weight_name + '/best_weights')
 
     def make_prediction(self, inp_data):
+        t = time.time()
         prediction = self.model.predict(inp_data, verbose=0)[0]
+
+        print(time.time() - t)
 
         return prediction[0] > 0.5
 
@@ -85,7 +89,7 @@ class FIXA(FX_Model):
         if len(self.price_list) < 3*self.k:
             up_ = random.random() > 0.5
         else:
-            inp_data = ret_inpdata(self.price_list, k)
+            inp_data = ret_inpdata(self.price_list, self.k)
             up_ = self.make_prediction(inp_data)
 
         return up_
@@ -113,13 +117,17 @@ class TraderDriver:
         self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
                            'EURUSD': {'sell': 2, 'buy': 3}}
 
-    def login(self):
+    def login(self, demo=True):
         if not self.driver.current_url\
                 == 'https://web.thinktrader.com/account/login':
 
             self.driver.get('https://web.thinktrader.com/account/login')
             time.sleep(3)
         try:
+            if demo:
+                demo_live = self.driver.find_element(
+                    By.CLASS_NAME, "LoginPresenter_tradingMode__3vwGH")
+                demo_live.find_elements(By.TAG_NAME, "div")[0].click()
             if self.driver.find_element(By.ID, "email"):
                 self.driver.find_element(By.ID, "email").send_keys('a')
                 self.driver.find_element(By.ID, "email").clear()
@@ -148,7 +156,7 @@ class TraderDriver:
             else:
                 pass
 
-        except NoSuchElementException:
+        except (NoSuchElementException, StaleElementReferenceException):
             pass
 
     def select_symbol_position(self, symbol, position):
@@ -250,7 +258,9 @@ class TraderDriver:
                 sashine_inp.clear()
                 sashine_inp.send_keys(sashine)
 
-                gyaku_sashine_inp.clear()
+                # gyaku_sashine_inp.clear()
+                for i in range(7):
+                    gyaku_sashine_inp.send_keys(Keys.BACK_SPACE)
                 gyaku_sashine_inp.send_keys(gyaku_sashine)
 
                 for _ in range(2):
@@ -490,18 +500,18 @@ class TraderDriver:
                 time.sleep(5)
 
         tbody = self.driver.find_elements(By.TAG_NAME, 'tbody')
-        trigger = tbody[-1].find_elements(
-            By.CLASS_NAME, 'PositionGrid_triggerContainer__1yWG1')
-
-        if symbol == 'EURUSD':
-            line_num = 0
-        else:
-            if position_bool[0][0]:  # EURUSDがある場合
-                line_num = 1
-            else:
-                line_num = 0
-
         try:
+            trigger = tbody[-1].find_elements(
+                By.CLASS_NAME, 'PositionGrid_triggerContainer__1yWG1')
+
+            if symbol == 'EURUSD':
+                line_num = 0
+            else:
+                if position_bool[0][0]:  # EURUSDがある場合
+                    line_num = 1
+                else:
+                    line_num = 0
+
             if line_num == 0:
                 trigger[0].click()
             else:
@@ -514,26 +524,30 @@ class TraderDriver:
             self.submit_sashine(sashine, gyaku_sashine)
 
         # 建玉がない（逆指値決済された）
-        except IndexError as e:
+        except (IndexError, StaleElementReferenceException) as e:
             print(e)
 
     def submit_sashine(self, sashine, gyaku_sashine):
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-        inpts_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
+        try:
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+            inpts_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
 
-        inpts_[1].clear()
-        inpts_[1].send_keys(sashine)
+            inpts_[1].clear()
+            inpts_[1].send_keys(sashine)
 
-        inpts_[3].clear()
-        inpts_[3].send_keys(gyaku_sashine)
+            inpts_[3].clear()
+            inpts_[3].send_keys(gyaku_sashine)
 
-        tradeticket_container = self.driver.find_element(
-            By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-        button_ = tradeticket_container.find_elements(
-            By.CLASS_NAME, 'Button_button__CftuL')
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+            button_ = tradeticket_container.find_elements(
+                By.CLASS_NAME, 'Button_button__CftuL')
 
-        button_[1].click()
+            button_[1].click()
+
+        except NoSuchElementException:
+            pass
 
 
 class FIXAR(TraderDriver):
@@ -658,7 +672,8 @@ class FIXAR(TraderDriver):
         ノーポジから次のポジションを計算する関数
         """
         self.fixa[symbol].symbol_get_price = None
-        if self.zero_spread():
+        # if self.zero_spread():
+        if True:
             pred = self.fixa[symbol].ret_prediction()
             sashine, gyaku_sashine = self.ret_sashine_gyakusashine(
                 symbol, rate, pred)
@@ -691,6 +706,20 @@ class FIXAR(TraderDriver):
             else:  # ポジションがない場合
                 self.calc_new_position(symbol, rate_dic[symbol])
 
+    def make_pricelist(self):
+        # 再接続画面になっていないかの確認
+        self.check_recconect()
+        # ログイン画面になっていないかの確認
+        self.check_login()
+        # 通知バナーboxを削除
+        self.delete_notif_banner()
+
+        rate_dic = self.ret_pricedic()
+
+        # AI価格リスト更新
+        for symbol in ['EURUSD', 'USDJPY']:
+            self.fixa[symbol].refresh_pricelist(rate_dic[symbol])
+
     def driver_refresh(self):
         try:
             self.driver.close()
@@ -703,76 +732,78 @@ class FIXAR(TraderDriver):
 
 
 # %%
-amount = 1000
+if __name__ == '__main__':
+    demo = True
+    amount = 1000
 
-sashine_eurusd, gyaku_sashine_eurusd = round(0.1/150, 5), round(0.1/150, 5)
-sashine_usdjpy, gyaku_sashine_usdjpy = round(0.1, 3), round(0.1, 3)
+    sashine_eurusd, gyaku_sashine_eurusd = round(0.1/150, 5), round(0.1/150, 5)
+    sashine_usdjpy, gyaku_sashine_usdjpy = round(0.1, 3), round(0.1, 3)
 
-dynamic_rik = {'EURUSD': 0.008/100, 'USDJPY': 0.008/100}
-dynamic_son = {'EURUSD': 0.015/100, 'USDJPY': 0.015/100}
+    dynamic_rik = {'EURUSD': 0.008/100, 'USDJPY': 0.008/100}
+    dynamic_son = {'EURUSD': 0.015/100, 'USDJPY': 0.015/100}
 
-k, pr_k = 12, 12
+    k, pr_k = 12, 12
 
-fixar = FIXAR(amount, k, pr_k,
-              sashine_eurusd, gyaku_sashine_eurusd,
-              sashine_usdjpy, gyaku_sashine_usdjpy,
-              dynamic_rik, dynamic_son)
-# %%
-try:
-    fixar.login()
-except HumanChallengeError as e:
-    print(e)
-time.sleep(30)
-# %%
-count = 0
-error_count = 0
-while error_count < 3:
-    # try:
-    t = time.time()
-    fixar.run()
+    fixar = FIXAR(amount, k, pr_k,
+                  sashine_eurusd, gyaku_sashine_eurusd,
+                  sashine_usdjpy, gyaku_sashine_usdjpy,
+                  dynamic_rik, dynamic_son)
 
-    """
-    except ToPageRefreshError as e:
-        print(e)
-        fixar.driver.refresh()
-        try:
-            fixar.login()
-        except HumanChallengeError as e:
-            print(e)
-            line.send_to_masaumi('human challenge needed \n{}'.format(e))
-            break
-
-    except ToDriverRefreshError as e:
-        print(e)
-        fixar.driver_refresh()
-        try:
-            fixar.login()
-        except HumanChallengeError as e:
-            print(e)
-            line.send_to_masaumi('human challenge needed \n{}'.format(e))
-
-    except Exception as e:
-        print(e)
-        fixar.driver_refresh()
-        line.send_to_masaumi('fatal error occuered \n{}'.format(e))
-        error_count += 1
-    """
-
-    count += 1
-    print('{}\n{}\n__________\n'.format(count, datetime.now()))
-
-    if count % 10 == 0:
-        fixar.driver.refresh()
-    """
-    with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
-        pickle.dump(hist_dic, f)
-    """
-    if fixar.driver.current_url == 'https://web.thinktrader.com/account/login':
+    try:
         fixar.login()
+    except HumanChallengeError as e:
+        print(e)
+    time.sleep(30)
 
-    sleep_time = 60 - (time.time() - t)
-    sleep_time = sleep_time if sleep_time > 0 else 0
-    time.sleep(sleep_time)
+    count = 0
+    error_count = 0
+    while error_count < 3:
+        try:
+            t = time.time()
+            fixar.run()
+            # fixar.make_pricelist()
 
-line.send_to_masaumi('FIXAR stopped')
+        except ToPageRefreshError as e:
+            print(e)
+            fixar.driver.refresh()
+            try:
+                fixar.login()
+            except HumanChallengeError as e:
+                print(e)
+                line.send_to_masaumi('human challenge needed \n{}'.format(e))
+                break
+
+        except (ToDriverRefreshError, WebDriverException) as e:
+            print(e)
+            fixar.driver_refresh()
+            try:
+                fixar.login()
+            except HumanChallengeError as e:
+                print(e)
+                line.send_to_masaumi('human challenge needed \n{}'.format(e))
+        """
+        except Exception as e:
+            print(e)
+            fixar.driver_refresh()
+            line.send_to_masaumi('fatal error occuered \n{}'.format(e))
+            error_count += 1
+        """
+
+        count += 1
+        print('{}\n{}\n__________\n'.format(count, datetime.now()))
+
+        if count % 10 == 0:
+            fixar.driver.refresh()
+        """
+        with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
+            pickle.dump(hist_dic, f)
+        """
+        if fixar.driver.current_url == 'https://web.thinktrader.com/account/login':
+            fixar.login()
+
+        sleep_time = 60 - (time.time() - t)
+        sleep_time = sleep_time if sleep_time > 0 else 0
+        time.sleep(sleep_time)
+
+    line.send_to_masaumi('FIXAR stopped')
 # %%
