@@ -83,15 +83,17 @@ for symbol in ['USDJPY', 'EURUSD']:
         for j in range(2):
             son = 0.00005*((j+1)*jj)
 
-    simulator = Simulator(symbol, rik, son)
-    kane, asset = simulator.run_simulation()
+            simulator = Simulator(symbol, rik, son)
+            kane, asset = simulator.run_simulation()
 
-    base_dir = 'datas/simulation/{}'.format(symbol)
-    os.makedirs(base_dir, exist_ok=True)
-    save_dir = base_dir + \
-        '/m{}_rik{}_son{}.npy'.format(1,
-                                      "{:.5f}".format(rik),
-                                      "{:.5f}".format(son))
+            print(symbol, rik, son, kane)
 
-    np.save(save_dir, np.array(asset, dtype='float32'))
+            base_dir = 'datas/simulation/{}'.format(symbol)
+            os.makedirs(base_dir, exist_ok=True)
+            save_dir = base_dir + \
+                '/m{}_rik{}_son{}.npy'.format(1,
+                                              "{:.4f}".format(rik),
+                                              "{:.4f}".format(son))
+
+            np.save(save_dir, np.array(asset, dtype='float32'))
 # %%
