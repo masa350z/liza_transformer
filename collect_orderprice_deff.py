@@ -75,56 +75,58 @@ dynamic_son = {'EURUSD': 0.015/100, 'USDJPY': 0.015/100}
 
 k, pr_k = 12, 12
 
-# while True:
-fixar = TestFIXAR(amount, k, pr_k,
-                  sashine_eurusd, gyaku_sashine_eurusd,
-                  sashine_usdjpy, gyaku_sashine_usdjpy,
-                  dynamic_rik, dynamic_son)
-
-for i in range(100):
-    fixar.fixa['EURUSD'].refresh_pricelist(1.08234)
-    fixar.fixa['USDJPY'].refresh_pricelist(108.234)
-
 while True:
-    try:
-        fixar.login(demo=demo)
-        time.sleep(60)
+    fixar = TestFIXAR(amount, k, pr_k,
+                      sashine_eurusd, gyaku_sashine_eurusd,
+                      sashine_usdjpy, gyaku_sashine_usdjpy,
+                      dynamic_rik, dynamic_son)
 
-        data_path_base = 'datas/price_diff_list/'
-        num_csv = len(glob(data_path_base + '*'))
-        file_name = data_path_base + 'pricedifflist' + \
-            str(num_csv).zfill(4) + '.csv'
+    for i in range(100):
+        fixar.fixa['EURUSD'].refresh_pricelist(1.08234)
+        fixar.fixa['USDJPY'].refresh_pricelist(108.234)
 
-        price_diff_list = []
-        error = False
-        while not error:
-            try:
-                symbol = 'USDJPY' if random.random() > 0.5 else 'EURUSD'
-                side = 'buy' if random.random() > 0.5 else 'sell'
-                fixar.settle_all_position()
-                time.sleep(30)
+    while True:
+        try:
+            fixar.login(demo=demo)
+            time.sleep(60)
 
-                time_diff, price_diff = fixar.test_run(symbol, side)
-                price_diff_list.append([symbol, side, time_diff, price_diff])
-            except Exception as e:
-                print(e)
-                error = True
+            data_path_base = 'datas/price_diff_list/'
+            num_csv = len(glob(data_path_base + '*'))
+            file_name = data_path_base + 'pricedifflist' + \
+                str(num_csv).zfill(4) + '.csv'
 
-            if len(price_diff_list) % 10 == 0:
-                pd.DataFrame(price_diff_list).to_csv(file_name, index=False)
+            price_diff_list = []
+            error = False
+            while not error:
+                try:
+                    symbol = 'USDJPY' if random.random() > 0.5 else 'EURUSD'
+                    side = 'buy' if random.random() > 0.5 else 'sell'
+                    fixar.settle_all_position()
+                    time.sleep(30)
 
-            if len(price_diff_list) == 100:
-                fixar.driver_refresh()
-                fixar.login(demo=demo)
-                time.sleep(60)
-            elif len(price_diff_list) == 300:
-                break
+                    time_diff, price_diff = fixar.test_run(symbol, side)
+                    price_diff_list.append(
+                        [symbol, side, time_diff, price_diff])
+                except Exception as e:
+                    print(e)
+                    error = True
 
-        pd.DataFrame(price_diff_list).to_csv(file_name, index=False)
+                if len(price_diff_list) % 10 == 0:
+                    pd.DataFrame(price_diff_list).to_csv(
+                        file_name, index=False)
 
-    except Exception as e:
-        print(e)
-        time.sleep(60)
-        continue
+                if len(price_diff_list) == 100:
+                    fixar.driver_refresh()
+                    fixar.login(demo=demo)
+                    time.sleep(60)
+                elif len(price_diff_list) == 300:
+                    break
+
+            pd.DataFrame(price_diff_list).to_csv(file_name, index=False)
+
+        except Exception as e:
+            print(e)
+            time.sleep(60)
+            continue
 
 # %%

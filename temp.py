@@ -13,6 +13,10 @@ for i in price_diff_list:
 df_eurusd = df[df['0'] == 'EURUSD'].reset_index(drop=True)
 df_usdjpy = df[df['0'] == 'USDJPY'].reset_index(drop=True)
 # %%
+df_eurusd[df_eurusd['1'] == 'buy']['3'].hist(bins=100)
+# %%
+df_eurusd[df_eurusd['1'] == 'sell']['3'].hist(bins=100)
+# %%
 df_eurusd['3'].plot()
 # %%
 df_usdjpy['3'].plot()
