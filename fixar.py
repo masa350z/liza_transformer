@@ -2,7 +2,7 @@
 from selenium.common.exceptions import StaleElementReferenceException, \
     WebDriverException, NoSuchElementException, \
     ElementClickInterceptedException, NoSuchWindowException, \
-    InvalidSessionIdException
+    InvalidSessionIdException, InvalidElementStateException
 from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
@@ -19,6 +19,22 @@ from datetime import datetime
 import numpy as np
 import random
 import time
+
+
+def clear_and_send_keys(element, value, driver):
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            element.clear()
+            element.send_keys(value)
+            break  # 成功したらループを抜ける
+        except InvalidElementStateException:
+            if attempt < max_attempts - 1:  # 最後の試行ではない場合は少し待つ
+                time.sleep(1)
+            else:
+                # JavaScriptを使用して直接値を設定する
+                driver.execute_script(
+                    "arguments[0].value = arguments[1];", element, value)
 
 
 def ret_inpdata(hist, k):
@@ -117,7 +133,7 @@ class TraderDriver:
         self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
                            'EURUSD': {'sell': 2, 'buy': 3}}
 
-    def login(self, demo=True):
+    def login(self, demo=False):
         if not self.driver.current_url\
                 == 'https://web.thinktrader.com/account/login':
 
@@ -533,11 +549,8 @@ class TraderDriver:
                 By.CLASS_NAME, 'TradeTicket_container__2S2h7')
             inpts_ = tradeticket_container.find_elements(By.TAG_NAME, 'input')
 
-            inpts_[1].clear()
-            inpts_[1].send_keys(sashine)
-
-            inpts_[3].clear()
-            inpts_[3].send_keys(gyaku_sashine)
+            clear_and_send_keys(inpts_[1], sashine, self.driver)
+            clear_and_send_keys(inpts_[3], gyaku_sashine, self.driver)
 
             tradeticket_container = self.driver.find_element(
                 By.CLASS_NAME, 'TradeTicket_container__2S2h7')
@@ -739,8 +752,8 @@ if __name__ == '__main__':
     sashine_eurusd, gyaku_sashine_eurusd = round(0.1/150, 5), round(0.1/150, 5)
     sashine_usdjpy, gyaku_sashine_usdjpy = round(0.1, 3), round(0.1, 3)
 
-    dynamic_rik = {'EURUSD': 0.008/100, 'USDJPY': 0.008/100}
-    dynamic_son = {'EURUSD': 0.015/100, 'USDJPY': 0.015/100}
+    dynamic_rik = {'EURUSD': 0.00003, 'USDJPY': 0.00003}
+    dynamic_son = {'EURUSD': 0.0009, 'USDJPY': 0.0009}
 
     k, pr_k = 12, 12
 
@@ -758,11 +771,12 @@ if __name__ == '__main__':
     count = 0
     error_count = 0
     while error_count < 3:
-        try:
-            t = time.time()
-            fixar.run()
-            # fixar.make_pricelist()
+        # try:
+        t = time.time()
+        fixar.run()
+        # fixar.make_pricelist()
 
+        """
         except ToPageRefreshError as e:
             print(e)
             fixar.driver.refresh()
@@ -781,6 +795,8 @@ if __name__ == '__main__':
             except HumanChallengeError as e:
                 print(e)
                 line.send_to_masaumi('human challenge needed \n{}'.format(e))
+        """
+
         """
         except Exception as e:
             print(e)
