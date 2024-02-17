@@ -1,5 +1,5 @@
 # %%
-from selenium.common.exceptions import StaleElementReferenceException, \
+from selenium.common.exceptions import StaleElementReferenceException, ElementNotInteractableException, \
     WebDriverException, NoSuchElementException, \
     ElementClickInterceptedException, NoSuchWindowException, \
     InvalidSessionIdException, InvalidElementStateException
@@ -13,7 +13,6 @@ from selenium.webdriver.common.keys import Keys
 import undetected_chromedriver as uc
 
 from modules import models, modules
-import line
 
 from datetime import datetime
 import numpy as np
@@ -166,13 +165,18 @@ class TraderDriver:
                     if '<iframe src=' in i.get_attribute('outerHTML'):
                         iframe = i
                         break
-                time.sleep(1)
-                # if 'relative; width:' in iframe.get_attribute('outerHTML'):
-                #    raise HumanChallengeError()
+                try:
+                    if 'relative; width:' in iframe.get_attribute('outerHTML'):
+                        raise HumanChallengeError()
+                except AttributeError:
+                    raise ToPageRefreshError()
+
+                while self.driver.find_elements(By.CLASS_NAME, "RemainingVolume_marginPercent__2hJaU") is None:
+                    time.sleep(1)
             else:
                 pass
 
-        except (NoSuchElementException, StaleElementReferenceException):
+        except (NoSuchElementException, StaleElementReferenceException, ElementNotInteractableException):
             pass
 
     def select_symbol_position(self, symbol, position):
@@ -407,9 +411,11 @@ class TraderDriver:
                     NoSuchElementException):
                 error_count += 1
                 time.sleep(1)
-
-        usdjpy = float(usdjpy)
-        eurusd = float(eurusd)
+        try:
+            usdjpy = float(usdjpy)
+            eurusd = float(eurusd)
+        except ValueError as e:
+            raise ToDriverRefreshError(e)
 
         return usdjpy, eurusd
 
@@ -418,7 +424,7 @@ class TraderDriver:
             elements = self.driver.find_elements(
                 By.CLASS_NAME, "BidAskSpread_spread__21ZFB")
 
-            return sum([float(i.text) for i in elements]) == 0
+            return sum([float(i.text) == 0 for i in elements]) >= 2
 
         except Exception as e:
             print('Error Occured zero_spread \n{}'.format(e))
@@ -685,8 +691,7 @@ class FIXAR(TraderDriver):
         ノーポジから次のポジションを計算する関数
         """
         self.fixa[symbol].symbol_get_price = None
-        # if self.zero_spread():
-        if True:
+        if self.zero_spread():
             pred = self.fixa[symbol].ret_prediction()
             sashine, gyaku_sashine = self.ret_sashine_gyakusashine(
                 symbol, rate, pred)
@@ -771,12 +776,11 @@ if __name__ == '__main__':
     count = 0
     error_count = 0
     while error_count < 3:
-        # try:
-        t = time.time()
-        fixar.run()
-        # fixar.make_pricelist()
+        try:
+            t = time.time()
+            fixar.run()
+            # fixar.make_pricelist()
 
-        """
         except ToPageRefreshError as e:
             print(e)
             fixar.driver.refresh()
@@ -784,7 +788,6 @@ if __name__ == '__main__':
                 fixar.login()
             except HumanChallengeError as e:
                 print(e)
-                line.send_to_masaumi('human challenge needed \n{}'.format(e))
                 break
 
         except (ToDriverRefreshError, WebDriverException) as e:
@@ -794,8 +797,6 @@ if __name__ == '__main__':
                 fixar.login()
             except HumanChallengeError as e:
                 print(e)
-                line.send_to_masaumi('human challenge needed \n{}'.format(e))
-        """
 
         """
         except Exception as e:
@@ -821,5 +822,4 @@ if __name__ == '__main__':
         sleep_time = sleep_time if sleep_time > 0 else 0
         time.sleep(sleep_time)
 
-    line.send_to_masaumi('FIXAR stopped')
 # %%

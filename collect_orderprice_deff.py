@@ -1,4 +1,7 @@
 # %%
+"""
+実際に取得した価格と注文約定した価格の差を収集するためのプログラム
+"""
 from fixar import FIXAR
 import time
 import pandas as pd

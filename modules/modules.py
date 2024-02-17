@@ -20,7 +20,7 @@ if gpus:
 
 
 def ret_hist(symbol):
-    hist_path = 'D:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
+    hist_path = 'E:/documents/hist_data/symbol/{}/1m.csv'.format(symbol)
     df = pd.read_csv(hist_path)
     hist = np.array(df['price'], dtype='float32')
     timestamp = np.array(df['timestamp'], dtype='int32')
