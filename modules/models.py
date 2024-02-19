@@ -21,7 +21,8 @@ def normalize(x, mode=0):
 
 
 class FX_Transformer(layers.Layer):
-    def __init__(self, seq_len, num_layer_loops, vector_dims, num_heads, inner_dims):
+    def __init__(self, seq_len, num_layer_loops,
+                 vector_dims, num_heads, inner_dims):
         super(FX_Transformer, self).__init__()
 
         self.num_layer_loops = num_layer_loops
@@ -166,6 +167,46 @@ class LizaMultiTransformer(LizaTransformer):
         x = x[:, -1]
 
         x = self.dence_layer(x)
+        x = self.output_layer(x)
+
+        return x
+
+
+class LizaAffine(tf.keras.Model):
+    def __init__(self):
+        super(LizaAffine, self).__init__()
+
+        self.conv01 = layers.Conv1D(filters=32,
+                                    kernel_size=3,
+                                    activation='relu')
+
+        self.dense01 = layers.Dense(50, activation='relu')
+        self.dense02 = layers.Dense(50, activation='relu')
+        self.dense03 = layers.Dense(50, activation='relu')
+        self.dense04 = layers.Dense(50, activation='relu')
+        self.dense05 = layers.Dense(50, activation='relu')
+        self.dense06 = layers.Dense(50, activation='relu')
+        self.dense07 = layers.Dense(50, activation='relu')
+        self.dense08 = layers.Dense(50, activation='relu')
+        self.dense09 = layers.Dense(50, activation='relu')
+        self.dense10 = layers.Dense(50, activation='relu')
+
+        self.output_layer = layers.Dense(2, activation='softmax')
+
+    def call(self, x):
+        x = x - tf.reduce_min(x, axis=1, keepdims=True)
+
+        x = self.dense01(x)
+        x = self.dense02(x)
+        x = self.dense03(x)
+        x = self.dense04(x)
+        x = self.dense05(x)
+        x = layers.Flatten()(x)
+        x = self.dense06(x)
+        x = self.dense07(x)
+        x = self.dense08(x)
+        x = self.dense09(x)
+        x = self.dense10(x)
         x = self.output_layer(x)
 
         return x

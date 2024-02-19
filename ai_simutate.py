@@ -2,6 +2,7 @@
 from modules import models, modules
 import pandas as pd
 import numpy as np
+import tensorflow as tf
 
 
 def simulate(hist_data, pr_k, rik, son, pred=None, spread=0):
@@ -49,8 +50,11 @@ hist, timestamp = modules.ret_hist(symbol)
 k = 12
 pr_k = 12
 
-base_m = 1
-
-# %%
 hist_2d = modules.hist_conv2d(hist, k+pr_k)
 # %%
+model = models.LizaAffine()
+# %%
+data_x = hist_2d[:, :k]
+data_y = hist_2d[:, k:]
+# %%
+data_x - tf.reduce_min(data_x, axis=1, keepdims=True)

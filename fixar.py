@@ -171,7 +171,7 @@ class TraderDriver:
                 except AttributeError:
                     raise ToPageRefreshError()
 
-                while self.driver.find_elements(By.CLASS_NAME, "RemainingVolume_marginPercent__2hJaU") is None:
+                while self.driver.find_element(By.CLASS_NAME, "RemainingVolume_marginPercent__2hJaU") is None:
                     time.sleep(1)
             else:
                 pass
@@ -414,6 +414,7 @@ class TraderDriver:
         try:
             usdjpy = float(usdjpy)
             eurusd = float(eurusd)
+            print(eurusd, usdjpy)
         except ValueError as e:
             raise ToDriverRefreshError(e)
 
