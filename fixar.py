@@ -782,6 +782,15 @@ if __name__ == '__main__':
             fixar.run()
             # fixar.make_pricelist()
 
+            count += 1
+            print('{}\n{}\n__________\n'.format(count, datetime.now()))
+
+            if count % 10 == 0:
+                fixar.driver.refresh()
+
+            if fixar.driver.current_url == 'https://web.thinktrader.com/account/login':
+                fixar.login()
+
         except ToPageRefreshError as e:
             print(e)
             fixar.driver.refresh()
@@ -799,28 +808,14 @@ if __name__ == '__main__':
             except HumanChallengeError as e:
                 print(e)
 
-        """
         except Exception as e:
             print(e)
             fixar.driver_refresh()
-            line.send_to_masaumi('fatal error occuered \n{}'.format(e))
             error_count += 1
-        """
-
-        count += 1
-        print('{}\n{}\n__________\n'.format(count, datetime.now()))
-
-        if count % 10 == 0:
-            fixar.driver.refresh()
-        """
-        with open('hist_data/hist_data_{}.pickle'.format(num_hist), 'wb') as f:
-            pickle.dump(hist_dic, f)
-        """
-        if fixar.driver.current_url == 'https://web.thinktrader.com/account/login':
-            fixar.login()
 
         sleep_time = 60 - (time.time() - t)
         sleep_time = sleep_time if sleep_time > 0 else 0
         time.sleep(sleep_time)
 
+    input('終了するにはEnterを押してください')
 # %%
