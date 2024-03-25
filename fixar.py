@@ -238,59 +238,50 @@ class TraderDriver:
         self.select_symbol_position(symbol, position)
         time.sleep(1)
 
-        error_count = 0
-        while error_count < 3:
-            try:
-                tradeticket_container = self.driver.find_element(
-                    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
-                error_count = 100
+        try:
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-            except NoSuchElementException as e:
-                print(e)
-                error_count += 1
-                self.click_navbar01()
-                self.select_symbol_position(symbol, position)
-                time.sleep(1)
-                continue
-
-        if error_count == 3:
+        except NoSuchElementException as e:
+            print(e)
+            self.settle_all_position()
             raise ToPageRefreshError()
-        else:
-            try:
-                tradeticket_container.find_elements(
-                    By.CLASS_NAME, 'checkbox')[0].click()
-                tradeticket_container.find_elements(
-                    By.CLASS_NAME, 'checkbox')[1].click()
 
-                tradeticket_container = self.driver.find_element(
-                    By.CLASS_NAME, 'TradeTicket_container__2S2h7')
+        try:
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[0].click()
+            tradeticket_container.find_elements(
+                By.CLASS_NAME, 'checkbox')[1].click()
 
-                input_ = tradeticket_container.find_elements(
-                    By.TAG_NAME, 'input')
+            tradeticket_container = self.driver.find_element(
+                By.CLASS_NAME, 'TradeTicket_container__2S2h7')
 
-                amount_inp = input_[2]
-                sashine_inp = input_[4]
-                gyaku_sashine_inp = input_[6]
+            input_ = tradeticket_container.find_elements(
+                By.TAG_NAME, 'input')
 
-                amount_inp.clear()
-                amount_inp.send_keys(amount)
+            amount_inp = input_[2]
+            sashine_inp = input_[4]
+            gyaku_sashine_inp = input_[6]
 
-                sashine_inp.clear()
-                sashine_inp.send_keys(sashine)
+            amount_inp.clear()
+            amount_inp.send_keys(amount)
 
-                # gyaku_sashine_inp.clear()
-                for i in range(7):
-                    gyaku_sashine_inp.send_keys(Keys.BACK_SPACE)
-                gyaku_sashine_inp.send_keys(gyaku_sashine)
+            sashine_inp.clear()
+            sashine_inp.send_keys(sashine)
 
-                for _ in range(2):
-                    elements = self.driver.find_elements(
-                        By.CLASS_NAME, "Button_button__CftuL")
-                    elements[1].click()
-                    time.sleep(1)
-            except IndexError as e:
-                print(e)
-                raise ToPageRefreshError(e)
+            # gyaku_sashine_inp.clear()
+            for i in range(7):
+                gyaku_sashine_inp.send_keys(Keys.BACK_SPACE)
+            gyaku_sashine_inp.send_keys(gyaku_sashine)
+
+            for _ in range(2):
+                elements = self.driver.find_elements(
+                    By.CLASS_NAME, "Button_button__CftuL")
+                elements[1].click()
+                time.sleep(1)
+        except IndexError as e:
+            print(e)
+            raise ToPageRefreshError(e)
         """
         except ElementClickInterceptedException as e:
             print('Error occured make_order \n{}'.format(e))

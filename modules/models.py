@@ -180,16 +180,16 @@ class LizaAffine(tf.keras.Model):
                                     kernel_size=3,
                                     activation='relu')
 
-        self.dense01 = layers.Dense(50, activation='relu')
-        self.dense02 = layers.Dense(50, activation='relu')
-        self.dense03 = layers.Dense(50, activation='relu')
-        self.dense04 = layers.Dense(50, activation='relu')
-        self.dense05 = layers.Dense(50, activation='relu')
-        self.dense06 = layers.Dense(50, activation='relu')
-        self.dense07 = layers.Dense(50, activation='relu')
-        self.dense08 = layers.Dense(50, activation='relu')
-        self.dense09 = layers.Dense(50, activation='relu')
-        self.dense10 = layers.Dense(50, activation='relu')
+        self.dense01 = layers.Dense(100, activation='relu')
+        self.dense02 = layers.Dense(80, activation='relu')
+        self.dense03 = layers.Dense(60, activation='relu')
+        self.dense04 = layers.Dense(40, activation='relu')
+        self.dense05 = layers.Dense(30, activation='relu')
+        self.dense06 = layers.Dense(100, activation='relu')
+        self.dense07 = layers.Dense(80, activation='relu')
+        self.dense08 = layers.Dense(60, activation='relu')
+        self.dense09 = layers.Dense(40, activation='relu')
+        self.dense10 = layers.Dense(20, activation='relu')
 
         self.output_layer = layers.Dense(2, activation='softmax')
 

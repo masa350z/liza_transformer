@@ -670,7 +670,7 @@ class LizaTrainerDiffer(Trainer):
                          k_freeze, init_ratio,
                          y_mode='differ')
 
-        self.optimizer = self.optimizer = tf.keras.optimizers.Adam(
+        self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
 
     def calc_acurracy(self, prediction, label):
@@ -688,3 +688,137 @@ class LizaTrainerDiffer(Trainer):
         loss = tf.reduce_mean(loss)
 
         return -1*loss
+
+
+class SimpleTrainer:
+    def __init__(self, model, data_x, data_y,
+                 train_rate=0.6, valid_rate=0.2, test_rate=0.2,
+                 opt1=1e-4, opt2=1e-6, switch_epoch=30,
+                 batch_size=32, init_ratio=1e-4,
+                 model_name='best_model'):
+
+        self.model = model
+        self.model_name = model_name
+        self.data_x = data_x
+        self.data_y = data_y
+        self.train_rate = train_rate
+        self.valid_rate = valid_rate
+        self.test_rate = test_rate
+        self.batch_size = batch_size
+        self.init_ratio = init_ratio
+
+        self.model.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=GradualDecaySchedule(opt1, opt2, switch_epoch))
+
+        # データを訓練データ、検証データ、テストデータに分割
+        self.train_dataset, self.valid_dataset, self.test_dataset = self.split_dataset()
+
+    def split_dataset(self):
+        # データセット全体のサイズ
+        dataset_size = len(self.data_x)
+        # 訓練データセットのサイズ
+        train_size = int(self.train_rate * dataset_size)
+        # 検証データセットのサイズ
+        valid_size = int(self.valid_rate * dataset_size)
+
+        # データを分割
+        train_x = self.data_x[:train_size]
+        train_y = self.data_y[:train_size]
+        valid_x = self.data_x[train_size:train_size+valid_size]
+        valid_y = self.data_y[train_size:train_size+valid_size]
+        test_x = self.data_x[train_size+valid_size:]
+        test_y = self.data_y[train_size+valid_size:]
+
+        # TensorFlowのデータセットに変換
+        train_dataset = tf.data.Dataset.from_tensor_slices(
+            (train_x, train_y)).batch(self.batch_size)
+        valid_dataset = tf.data.Dataset.from_tensor_slices(
+            (valid_x, valid_y)).batch(self.batch_size)
+        test_dataset = tf.data.Dataset.from_tensor_slices(
+            (test_x, test_y)).batch(self.batch_size)
+
+        return train_dataset, valid_dataset, test_dataset
+
+    def weights_random_init(self):
+        weights = self.model.get_weights()
+        for i, weight in enumerate(weights):
+            if len(weight.shape) > 1:  # 重みが行列の場合に限定
+                rand_mask = np.random.binomial(
+                    1, self.init_ratio, size=weight.shape)
+                rand_weights = np.random.randn(*weight.shape) * rand_mask
+                weights[i] = weight * (1 - rand_mask) + rand_weights
+        self.model.set_weights(weights)
+
+    def train(self, epochs=100, patience=10):
+        best_val_loss = float('inf')
+        patience_counter = 0
+
+        for epoch in range(epochs):
+            # 訓練ループ
+            print(f'\nEpoch {epoch+1}/{epochs}')
+            train_progress = tqdm(self.train_dataset, desc='Training')
+            for x, y in train_progress:
+                self.train_step(x, y)
+
+            # 検証ループ
+            val_loss = self.evaluate(self.valid_dataset)
+            train_progress.set_postfix(val_loss=val_loss)
+            print(f'Epoch {epoch+1}, Validation Loss: {val_loss}')
+
+            # 検証損失が改善されたかチェック
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                # 最良モデルを保存
+                self.model.save_weights(self.model_name)
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print("Early stopping...")
+                    break
+
+    def train_step(self, x, y):
+        with tf.GradientTape() as tape:
+            predictions = self.model(x, training=True)
+            loss = self.compute_loss(y, predictions)
+
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        self.model.optimizer.apply_gradients(
+            zip(gradients, self.model.trainable_variables))
+
+    def compute_loss(self, y_true, y_pred):
+        return tf.keras.losses.categorical_crossentropy(y_true, y_pred)
+
+    def evaluate(self, dataset):
+        total_loss = 0
+        num_batches = 0
+        for x, y in dataset:
+            predictions = self.model(x, training=False)
+            loss = self.compute_loss(y, predictions)
+            total_loss += tf.reduce_mean(loss)
+            num_batches += 1
+        avg_loss = total_loss / num_batches
+        return avg_loss.numpy()
+
+    def test_evaluate(self):
+        self.model.load_weights('best_model.h5')
+        test_loss = self.evaluate(self.test_dataset)
+        print(f'Test Loss: {test_loss}')
+        return test_loss
+
+    def repeat_train(self, repeats=5):
+        best_test_loss = float('inf')
+        for repeat in range(repeats):
+            print(f"Training repeat {repeat+1}/{repeats}")
+            # 重みをランダムに初期化
+            self.weights_random_init()
+            # 訓練と検証
+            self.train()
+            # テストデータで評価
+            test_loss = self.test_evaluate()
+            if test_loss < best_test_loss:
+                best_test_loss = test_loss
+                # 最良モデルを再保存
+                self.model.save_weights('best_overall_model.h5')
+                print(
+                    f'>>> Best overall model updated with test loss: {best_test_loss:.4f}')
