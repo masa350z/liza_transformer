@@ -132,18 +132,15 @@ class TraderDriver:
         self.button_dic = {'USDJPY': {'sell': 0, 'buy': 1},
                            'EURUSD': {'sell': 2, 'buy': 3}}
 
-    def login(self, demo=False):
+    def login(self):
         if not self.driver.current_url\
                 == 'https://web.thinktrader.com/account/login':
 
             self.driver.get('https://web.thinktrader.com/account/login')
             time.sleep(3)
         try:
-            if demo:
-                demo_live = self.driver.find_element(
-                    By.CLASS_NAME, "LoginPresenter_tradingMode__3vwGH")
-                demo_live.find_elements(By.TAG_NAME, "div")[0].click()
             if self.driver.find_element(By.ID, "email"):
+
                 self.driver.find_element(By.ID, "email").send_keys('a')
                 self.driver.find_element(By.ID, "email").clear()
                 self.driver.find_element(
@@ -154,11 +151,8 @@ class TraderDriver:
                 self.driver.find_element(
                     By.ID, "password").send_keys('masaumi73177@T')
 
-                spans = self.driver.find_elements(By.TAG_NAME, "span")
-
-                for i in spans:
-                    if i.text == 'ログイン':
-                        i.click()
+                login_button = self.driver.find_element(By.TAG_NAME, "button")
+                login_button.click()
 
                 iframe = self.driver.find_elements(By.TAG_NAME, "iframe")
                 for i in iframe:
@@ -743,7 +737,6 @@ class FIXAR(TraderDriver):
 
 # %%
 if __name__ == '__main__':
-    demo = True
     amount = 1000
 
     sashine_eurusd, gyaku_sashine_eurusd = round(0.1/150, 5), round(0.1/150, 5)
@@ -809,4 +802,8 @@ if __name__ == '__main__':
         time.sleep(sleep_time)
 
     input('終了するにはEnterを押してください')
+# %%
+driver = TraderDriver()
+driver.login()
+
 # %%

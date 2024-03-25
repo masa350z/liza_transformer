@@ -32,11 +32,11 @@ def ret_sampled_indices(data_y):
 
 
 # %%
+k = 18
+p = 6
+# %%
 for symbol in ['USDJPY', 'EURUSD']:
     hist_data, _ = modules.ret_hist(symbol)
-
-    k = 18
-    p = 6
 
     hist_data2d = modules.hist_conv2d(hist_data, k+p)
 
@@ -62,7 +62,19 @@ for symbol in ['USDJPY', 'EURUSD']:
     trainer.train(10000)
 # %%
 
-symbol = 'USDJPY'
+symbol = 'EURUSD'
+weights_name = 'weights/affine/{}/{}_{}/best_weights'.format(symbol, k, p)
+hist_data, _ = modules.ret_hist(symbol)
+
+hist_data2d = modules.hist_conv2d(hist_data, k+p)
+
+data_x = hist_data2d[:, :k]
+data_y = hist_data2d[:, k-1:]
+
+data_y = data_y[:, -1] > data_y[:, 0]
+data_y = np.expand_dims(data_y, 1)
+data_y = np.concatenate([data_y, np.logical_not(data_y)], axis=1)
+
 model = models.LizaAffine()
 model.load_weights(weights_name)
 # %%
@@ -81,3 +93,5 @@ lose = np.sum(data_y*prediction, axis=1) <= 0.5
 np.sum(win)/(len(win))
 # %%
 np.sum(win[-int(len(win)*0.2):])/int(len(win)*0.2)
+
+# %%
