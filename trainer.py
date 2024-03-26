@@ -1,126 +1,97 @@
 # %%
+import os
+import numpy as np
 from modules import modules
 from modules import models
-import pandas as pd
-import os
 
 
-def save_dataframe(weight_name, best_test_acc, best_test_loss):
-    weights_df = pd.read_csv('weights/model_dic.csv', index_col=0)
+def ret_sampled_indices(data_y):
+    # ラベルのカウント
+    up_count = np.sum(data_y[:, 0])
+    down_count = np.sum(data_y[:, 1])
 
-    if weight_name in weights_df.index:
-        weights_df.loc[weight_name].iloc[0] = best_test_loss
-        weights_df.loc[weight_name].iloc[1] = best_test_acc
-    else:
-        model_dic = {}
-        model_dic[weight_name] = [best_test_loss, best_test_acc]
-        df = pd.DataFrame(model_dic).T
-        df.columns = ['loss', 'acc']
-        weights_df = pd.concat([weights_df, df])
+    # 少ない方のクラスの数を取得
+    min_count = min(up_count, down_count)
 
-    weights_df.to_csv('weights/model_dic.csv')
+    # 上昇と下降のインデックスを取得
+    up_indices = np.where(data_y[:, 0])[0]
+    down_indices = np.where(data_y[:, 1])[0]
 
+    # それぞれからランダムにサンプリング
+    np.random.seed(0)  # 再現性のためのシード設定
+    up_sampled_indices = np.random.choice(up_indices, min_count, replace=False)
+    down_sampled_indices = np.random.choice(
+        down_indices, min_count, replace=False)
 
-class ModelTrainer:
-    def __init__(self, hist, m_lis, k, pr_k, y_mode='binary'):
-        self.hist = hist
-        self.m_lis = m_lis
-        self.k = k
-        self.pr_k = pr_k
-        self.y_mode = y_mode
+    # サンプリングしたインデックスを統合
+    sampled_indices = np.concatenate(
+        [up_sampled_indices, down_sampled_indices])
+    np.random.shuffle(sampled_indices)  # データの順番をランダムにする
 
-    def run_train(self, seq_len, weights_save_name, batch_size,
-                  per_batch=1, repeats=1000,
-                  break_epochs=5, break_repeats=10):
-
-        os.makedirs(weights_save_name, exist_ok=True)
-
-        best_test_loss = float('inf')
-        # best_test_value = float('inf')
-        best_test_acc = 0
-        last_repeat = 0
-        repeats_count = 0
-
-        # 指定した反復回数でモデルのトレーニングを実行
-        for repeat in range(repeats):
-            if y_mode == 'binary':
-                if len(self.hist.shape) == 1:
-                    model = models.LizaTransformer(seq_len, out_dim=2)
-                else:
-                    model = models.LizaMultiTransformer(seq_len, out_dim=2)
-                # データとモデルを用いてトレーニングのセッションを初期化
-                liza_trainer = modules.LizaTrainerBinary(model, weight_name, batch_size,
-                                                         self.hist, self.m_lis, self.k, self.pr_k)
-            elif y_mode == 'contrarian':
-                if len(self.hist.shape) == 1:
-                    model = models.LizaTransformer(seq_len, out_dim=3)
-                else:
-                    model = models.LizaMultiTransformer(seq_len, out_dim=3)
-                # データとモデルを用いてトレーニングのセッションを初期化
-                liza_trainer = modules.LizaTrainerContrarian(model, weight_name, batch_size,
-                                                             self.hist, self.m_lis, self.k, self.pr_k)
-            elif y_mode == 'differ':
-                if len(self.hist.shape) == 1:
-                    model = models.LizaTransformer(seq_len, out_dim=2)
-                else:
-                    model = models.LizaMultiTransformer(seq_len, out_dim=2)
-                # データとモデルを用いてトレーニングのセッションを初期化
-                liza_trainer = modules.LizaTrainerDiffer(model, weight_name, batch_size,
-                                                         self.hist, self.m_lis, self.k, self.pr_k)
-
-            liza_trainer.repeats = repeat
-            liza_trainer.best_test_loss = best_test_loss
-            liza_trainer.best_test_acc = best_test_acc
-
-            # トレーニングの実行
-            test_acc, test_loss = liza_trainer.run_train(
-                per_batch, break_epochs=break_epochs)
-
-            # test_value = test_loss*abs(test_loss-liza_trainer.temp_val_loss)
-
-            if test_acc != 0:
-                # 最も良いtest_dataの損失を更新
-                # if test_value < best_test_value:
-                if test_loss < best_test_loss:
-                    best_test_loss = test_loss
-                    best_test_acc = test_acc
-                    # best_test_value = test_value
-
-                    last_repeat = repeats_count
-
-                    # トレーニング後のモデルの重みを保存
-                    liza_trainer.model.save_weights(liza_trainer.weight_name)
-
-                repeats_count += 1
-
-            if repeats_count - last_repeat >= break_repeats:
-                break
-
-        return best_test_acc, best_test_loss
+    return sampled_indices
 
 
 # %%
-y_mode = 'binary'
-symbol = 'USDJPY'
+k = 18
+p = 6
+# %%
+for symbol in ['USDJPY', 'EURUSD']:
+    hist_data, _ = modules.ret_hist(symbol)
 
-for symbol in ['GBPJPY', 'EURJPY', 'AUDUSD', 'GBPUSD']:
-    hist, timestamp = modules.ret_hist(symbol)
+    hist_data2d = modules.hist_conv2d(hist_data, k+p)
 
-    for pr_k in [12]:
-        for k, batch_size in [[12, 120*1000]]:
-            for base_m in [1]:
-                m_lis = [base_m, base_m*2, base_m*3]
+    data_x = hist_data2d[:, :k]
+    data_y = hist_data2d[:, k-1:]
 
-                weight_name = modules.ret_weight_name(symbol=symbol,
-                                                      k=k,
-                                                      pr_k=pr_k,
-                                                      m_lis=m_lis,
-                                                      y_mode=y_mode)
+    data_y = data_y[:, -1] > data_y[:, 0]
+    data_y = np.expand_dims(data_y, 1)
+    data_y = np.concatenate([data_y, np.logical_not(data_y)], axis=1)
 
-                os.makedirs(weight_name, exist_ok=True)
+    # 新しいdata_xとdata_yをサンプリングしたインデックスで構築
+    sampled_indices = ret_sampled_indices(data_y)
+    data_x_sampled = data_x[sampled_indices]
+    data_y_sampled = data_y[sampled_indices]
 
-                liza_trainer = ModelTrainer(hist, m_lis, k, pr_k,)
-                best_test_acc, best_test_loss = liza_trainer.run_train(
-                    k, weight_name, batch_size, break_repeats=10)
+    os.makedirs('weights/affine/{}/{}_{}'.format(symbol, k, p), exist_ok=True)
+    weights_name = 'weights/affine/{}/{}_{}/best_weights'.format(symbol, k, p)
+    trainer = modules.SimpleTrainer(models.LizaAffine(),
+                                    data_x_sampled, data_y_sampled, batch_size=2500000,
+                                    opt1=1e-4, opt2=1e-5, switch_epoch=1000,
+                                    model_name=weights_name)
 
-                save_dataframe(weight_name, best_test_acc, best_test_loss)
+    trainer.train(10000)
+# %%
+
+symbol = 'EURUSD'
+weights_name = 'weights/affine/{}/{}_{}/best_weights'.format(symbol, k, p)
+hist_data, _ = modules.ret_hist(symbol)
+
+hist_data2d = modules.hist_conv2d(hist_data, k+p)
+
+data_x = hist_data2d[:, :k]
+data_y = hist_data2d[:, k-1:]
+
+data_y = data_y[:, -1] > data_y[:, 0]
+data_y = np.expand_dims(data_y, 1)
+data_y = np.concatenate([data_y, np.logical_not(data_y)], axis=1)
+
+model = models.LizaAffine()
+model.load_weights(weights_name)
+# %%
+prediction = model.predict(data_x, batch_size=2500000)
+# %%
+np.average(prediction[:, 0])
+# %%
+np.sum(data_y[:, 0])/np.sum(data_y)
+
+# %%
+prediction
+# %%
+win = np.sum(data_y*prediction, axis=1) > 0.5
+lose = np.sum(data_y*prediction, axis=1) <= 0.5
+# %%
+np.sum(win)/(len(win))
+# %%
+np.sum(win[-int(len(win)*0.2):])/int(len(win)*0.2)
+
+# %%
