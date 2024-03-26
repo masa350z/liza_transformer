@@ -31,6 +31,17 @@ def ret_sampled_indices(data_y):
     return sampled_indices
 
 
+def ret_data_xy(k, hist_data2d):
+    data_x = hist_data2d[:, :k]
+    data_y = hist_data2d[:, k-1:]
+
+    data_y = data_y[:, -1] > data_y[:, 0]
+    data_y = np.expand_dims(data_y, 1)
+    data_y = np.concatenate([data_y, np.logical_not(data_y)], axis=1)
+
+    return data_x, data_y
+
+
 # %%
 k = 18
 p = 6
@@ -68,12 +79,8 @@ hist_data, _ = modules.ret_hist(symbol)
 
 hist_data2d = modules.hist_conv2d(hist_data, k+p)
 
-data_x = hist_data2d[:, :k]
-data_y = hist_data2d[:, k-1:]
 
-data_y = data_y[:, -1] > data_y[:, 0]
-data_y = np.expand_dims(data_y, 1)
-data_y = np.concatenate([data_y, np.logical_not(data_y)], axis=1)
+data_x, data_y = ret_data_xy(k, hist_data2d)
 
 model = models.LizaAffine()
 model.load_weights(weights_name)
