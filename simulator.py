@@ -1,4 +1,5 @@
 # %%
+import os
 import sys
 from modules import models, modules
 import numpy as np
@@ -123,7 +124,7 @@ for symbol in ['EURUSD', 'USDJPY']:
         model = models.LizaAffine()
         model.load_weights(weights_name)
 
-        prediction = model.predict(data_x, batch_size=2500000)
+        prediction = model.predict(data_x, batch_size=500000)
         prediction = (prediction[:, 0] > 0.5)*2-1
 
         input_data = np.stack([hist_data2d[:, -1],
@@ -135,8 +136,9 @@ for symbol in ['EURUSD', 'USDJPY']:
 
         kane, asset = simulator.run_simulation()
 
-        data_name = '/datas/simulation/{}/rik{}_son{}.txt'.format(
-            symbol, rik, son)
+        data_name = 'datas/simulation/{}/rik{}_son{}.txt'.format(
+            symbol, round(rik, 5), round(son, 5))
+
         with open(data_name, 'w') as f:
-            f.write(kane)
+            f.write(str(kane))
 # %%
