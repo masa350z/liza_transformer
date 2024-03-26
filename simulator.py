@@ -105,6 +105,9 @@ class Simulator:
 
 # %%
 k, pr_k = 18, 6
+df_eurusd, df_usdjpy = ret_combined_pricediff()
+df_dic = {'EURUSD': df_eurusd['3'],
+          'USDJPY': df_usdjpy['3']}
 
 args = sys.argv
 
@@ -124,7 +127,7 @@ for symbol in ['EURUSD', 'USDJPY']:
         model = models.LizaAffine()
         model.load_weights(weights_name)
 
-        prediction = model.predict(data_x, batch_size=500000)
+        prediction = model.predict(data_x, batch_size=50000)
         prediction = (prediction[:, 0] > 0.5)*2-1
 
         input_data = np.stack([hist_data2d[:, -1],
@@ -132,7 +135,8 @@ for symbol in ['EURUSD', 'USDJPY']:
 
         simulator = Simulator(input_data,
                               rik=rik,
-                              son=son)
+                              son=son,
+                              price_diff=df_dic[symbol])
 
         kane, asset = simulator.run_simulation()
 
