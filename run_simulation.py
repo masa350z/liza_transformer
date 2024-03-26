@@ -2,6 +2,6 @@
 import subprocess
 
 for jj in range(10):
-    subprocess.Popen(['python', 'rikson_simulation.py', str(jj)])
+    subprocess.Popen(['python', 'simulator.py', str(jj)])
 
 # %%

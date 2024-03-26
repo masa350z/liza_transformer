@@ -1,4 +1,5 @@
 # %%
+import sys
 from modules import models, modules
 import numpy as np
 import pandas as pd
@@ -103,29 +104,39 @@ class Simulator:
 
 # %%
 k, pr_k = 18, 6
-symbol = 'EURUSD'
-weights_name = 'weights/affine/{}/{}_{}/best_weights'.format(symbol, k, pr_k)
-hist_data, _ = modules.ret_hist(symbol)
 
-hist_data2d = modules.hist_conv2d(hist_data, k+pr_k)
-data_x, data_y = ret_data_xy(k, hist_data2d)
+args = sys.argv
 
-model = models.LizaAffine()
-model.load_weights(weights_name)
+rik = (int(args[1])+1)*0.00001
 
-prediction = model.predict(data_x, batch_size=2500000)
-prediction = (prediction[:, 0] > 0.5)*2-1
+for symbol in ['EURUSD', 'USDJPY']:
+    for son_ in range(10):
+        son = (son_+1)*0.0001
 
-# %%
-input_data = np.stack([hist_data2d[:, -1],
-                       prediction], axis=1)
+        weights_name = 'weights/affine/{}/{}_{}/best_weights'.format(
+            symbol, k, pr_k)
+        hist_data, _ = modules.ret_hist(symbol)
 
-simulator = Simulator(input_data,
-                      rik=0.00003,
-                      son=0.0009)
+        hist_data2d = modules.hist_conv2d(hist_data, k+pr_k)
+        data_x, data_y = ret_data_xy(k, hist_data2d)
 
-# %%
-kane, asset = simulator.run_simulation()
-# %%
-pd.DataFrame(asset).plot()
+        model = models.LizaAffine()
+        model.load_weights(weights_name)
+
+        prediction = model.predict(data_x, batch_size=2500000)
+        prediction = (prediction[:, 0] > 0.5)*2-1
+
+        input_data = np.stack([hist_data2d[:, -1],
+                               prediction], axis=1)
+
+        simulator = Simulator(input_data,
+                              rik=rik,
+                              son=son)
+
+        kane, asset = simulator.run_simulation()
+
+        data_name = '/datas/simulation/{}/rik{}_son{}.txt'.format(
+            symbol, rik, son)
+        with open(data_name, 'w') as f:
+            f.write(kane)
 # %%

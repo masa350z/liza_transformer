@@ -66,7 +66,8 @@ for symbol in ['USDJPY', 'EURUSD']:
     os.makedirs('weights/affine/{}/{}_{}'.format(symbol, k, p), exist_ok=True)
     weights_name = 'weights/affine/{}/{}_{}/best_weights'.format(symbol, k, p)
     trainer = modules.SimpleTrainer(models.LizaAffine(),
-                                    data_x_sampled, data_y_sampled, batch_size=2500000,
+                                    data_x_sampled, data_y_sampled,
+                                    batch_size=2500000,
                                     opt1=1e-4, opt2=1e-5, switch_epoch=1000,
                                     model_name=weights_name)
 
