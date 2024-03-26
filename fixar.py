@@ -36,12 +36,19 @@ def clear_and_send_keys(element, value, driver):
                     "arguments[0].value = arguments[1];", element, value)
 
 
-def ret_inpdata(hist, k):
+def ret_inpdata_multidata(hist, k):
     data_x01 = hist[-k:]
     data_x02 = hist[::-1][::2][::-1][-k:]
     data_x03 = hist[::-1][::3][::-1][-k:]
 
     inp_data = np.stack([data_x01, data_x02, data_x03]).T
+    inp_data = np.expand_dims(inp_data, 0)
+
+    return inp_data
+
+
+def ret_inpdata(hist, k):
+    inp_data = hist[-k:]
     inp_data = np.expand_dims(inp_data, 0)
 
     return inp_data
@@ -66,16 +73,12 @@ class HumanChallengeError(Exception):
 
 
 class FX_Model:
-    def __init__(self, symbol, base_m, k, pr_k):
-        m_lis = [base_m, base_m*2, base_m*3]
-        weight_name = modules.ret_weight_name(symbol=symbol,
-                                              k=k,
-                                              pr_k=pr_k,
-                                              m_lis=m_lis,
-                                              y_mode='binary')
+    def __init__(self, symbol, k, pr_k):
+        weight_name = 'weights/affine/{}/{}_{}/best_weights'.format(
+            symbol, k, pr_k)
 
-        self.model = models.LizaTransformer(k, out_dim=2)
-        self.model.load_weights(weight_name + '/best_weights')
+        self.model = models.LizaAffine()
+        self.model.load_weights(weight_name)
 
     def make_prediction(self, inp_data):
         t = time.time()
@@ -87,9 +90,10 @@ class FX_Model:
 
 
 class FIXA(FX_Model):
-    def __init__(self, symbol, sashine, gyakusashine,
+    def __init__(self, symbol,
+                 sashine, gyakusashine,
                  k, pr_k):
-        super().__init__(symbol, 1, k, pr_k)
+        super().__init__(symbol, k, pr_k)
         self.k, self.pr_k = k, pr_k
 
         self.price_list = []
@@ -98,10 +102,10 @@ class FIXA(FX_Model):
 
     def refresh_pricelist(self, price):
         self.price_list.append(price)
-        self.price_list = self.price_list[-(3*self.k+1):]
+        self.price_list = self.price_list[-(self.k+1):]
 
     def ret_prediction(self):
-        if len(self.price_list) < 3*self.k:
+        if len(self.price_list) < self.k:
             up_ = random.random() > 0.5
         else:
             inp_data = ret_inpdata(self.price_list, self.k)
@@ -745,7 +749,7 @@ if __name__ == '__main__':
     dynamic_rik = {'EURUSD': 0.00003, 'USDJPY': 0.00003}
     dynamic_son = {'EURUSD': 0.0009, 'USDJPY': 0.0009}
 
-    k, pr_k = 12, 12
+    k, pr_k = 18, 6
 
     fixar = FIXAR(amount, k, pr_k,
                   sashine_eurusd, gyaku_sashine_eurusd,
